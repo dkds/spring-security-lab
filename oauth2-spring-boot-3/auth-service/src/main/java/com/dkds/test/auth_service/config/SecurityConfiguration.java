@@ -19,6 +19,7 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.encrypt.KeyStoreKeyFactory;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.core.oidc.OidcScopes;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.authorization.client.InMemoryRegisteredClientRepository;
@@ -48,8 +49,8 @@ public class SecurityConfiguration {
     @Bean
     public UserDetailsService userDetailsService() {
         var user = User
-                .withUsername("test@test.com")
-                .password("{noop}password")
+                .withUsername(properties.getAuth().getUsername())
+                .password("{noop}" + properties.getAuth().getPassword())
                 .roles("USER")
                 .build();
         return new InMemoryUserDetailsManager(user);
@@ -93,14 +94,14 @@ public class SecurityConfiguration {
     @Bean
     public RegisteredClientRepository registeredClientRepository() {
         var webUiClient = RegisteredClient.withId(UUID.randomUUID().toString())
-                .clientId("web-ui")
-                .clientSecret("{noop}secret") // Use BCrypt in production
+                .clientId(properties.getAuth().getClientId())
+                .clientSecret("{noop}" + properties.getAuth().getClientSecret())
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
-                .redirectUri("http://localhost:5173") // Replace with your React callback URI
+                .redirectUri(properties.getAuth().getCallbackUri())
                 .scope(OidcScopes.OPENID)
                 .scope("read")
-                .clientSettings(ClientSettings.builder().requireAuthorizationConsent(false).build())
+                .clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
+                .clientSettings(ClientSettings.builder().requireProofKey(true).requireAuthorizationConsent(false).build())
                 .build();
 
         return new InMemoryRegisteredClientRepository(webUiClient);
@@ -108,22 +109,14 @@ public class SecurityConfiguration {
 
     @Bean
     @Order(1)
-    public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity httpSecurity)
-            throws Exception {
-        OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
-                OAuth2AuthorizationServerConfigurer.authorizationServer();
+    public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity httpSecurity) throws Exception {
+        var authorizationServerConfigurer = OAuth2AuthorizationServerConfigurer.authorizationServer();
 
         httpSecurity
                 .securityMatcher(authorizationServerConfigurer.getEndpointsMatcher())
                 .with(authorizationServerConfigurer, (authorizationServer) ->
                         authorizationServer.oidc(Customizer.withDefaults())    // Enable OpenID Connect 1.0
                 )
-                .authorizeHttpRequests((authorize) ->
-                        authorize
-                                .anyRequest().authenticated()
-                )
-                // Redirect to the login page when not authenticated from the
-                // authorization endpoint
                 .exceptionHandling((exceptions) -> exceptions
                         .defaultAuthenticationEntryPointFor(
                                 new LoginUrlAuthenticationEntryPoint("/login"),
@@ -136,11 +129,13 @@ public class SecurityConfiguration {
 
     @Bean
     @Order(2)
-    public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http)
+    public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity httpSecurity)
             throws Exception {
-        http
+        httpSecurity
                 .csrf(AbstractHttpConfigurer::disable)
+                .cors(Customizer.withDefaults())
                 .authorizeHttpRequests((authorize) -> authorize
+                        .requestMatchers("/.well-known/**").permitAll()
                         .requestMatchers(
                                 "/login",
                                 "/index.html",
@@ -149,13 +144,11 @@ public class SecurityConfiguration {
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
-                // Form login handles the redirect to the login page from the
-                // authorization server filter chain
                 .formLogin(form -> form
                         .loginPage("/login")
                         .permitAll()
                 );
 
-        return http.build();
+        return httpSecurity.build();
     }
 }

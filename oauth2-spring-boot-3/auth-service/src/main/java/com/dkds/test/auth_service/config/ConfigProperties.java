@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 public class ConfigProperties {
 
     private Jwk jwk;
+    private Auth auth;
 
     @Data
     public static class Jwk {
@@ -18,5 +19,14 @@ public class ConfigProperties {
         private String keystorePassword;
         private String keyAlias;
         private String keyPassword;
+    }
+
+    @Data
+    public static class Auth {
+        private String username;
+        private String password;
+        private String clientId;
+        private String clientSecret;
+        private String callbackUri;
     }
 }
