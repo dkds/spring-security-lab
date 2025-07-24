@@ -97,7 +97,9 @@ public class SecurityConfiguration {
                 .clientId(properties.getAuth().getClientId())
                 .clientSecret("{noop}" + properties.getAuth().getClientSecret())
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
                 .redirectUri(properties.getAuth().getCallbackUri())
+                .postLogoutRedirectUri(properties.getAuth().getPostLogoutCallbackUri())
                 .scope(OidcScopes.OPENID)
                 .scope("read")
                 .clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
@@ -116,6 +118,9 @@ public class SecurityConfiguration {
                 .securityMatcher(authorizationServerConfigurer.getEndpointsMatcher())
                 .with(authorizationServerConfigurer, (authorizationServer) ->
                         authorizationServer.oidc(Customizer.withDefaults())    // Enable OpenID Connect 1.0
+                )
+                .authorizeHttpRequests((authorize) -> authorize
+                        .anyRequest().authenticated()
                 )
                 .exceptionHandling((exceptions) -> exceptions
                         .defaultAuthenticationEntryPointFor(
