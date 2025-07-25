@@ -97,7 +97,6 @@ public class SecurityConfiguration {
                 .clientId(properties.getAuth().getClientId())
                 .clientSecret("{noop}" + properties.getAuth().getClientSecret())
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
                 .redirectUri(properties.getAuth().getCallbackUri())
                 .postLogoutRedirectUri(properties.getAuth().getPostLogoutCallbackUri())
                 .scope(OidcScopes.OPENID)
