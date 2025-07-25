@@ -7,4 +7,5 @@ export const oidcConfig: UserManagerSettings = {
     post_logout_redirect_uri: 'http://localhost:3001/',
     response_type: 'code',
     scope: 'openid read',
+    automaticSilentRenew: false
 };
