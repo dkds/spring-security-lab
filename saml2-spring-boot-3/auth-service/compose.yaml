@@ -1,0 +1,20 @@
+services:
+
+  mysql:
+    image: docker.io/mysql:8.0.42
+    restart: always
+    environment:
+      MYSQL_DATABASE: 'saml-test'
+      MYSQL_ROOT_PASSWORD: '12345678'
+    ports:
+      - "13306:3306"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.3.2
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: tempadmin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: temppswd
+    ports:
+      - "8080:8080"
+    command:
+      - start-dev
