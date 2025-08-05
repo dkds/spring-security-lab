@@ -1,0 +1,36 @@
+spring.application.name: saml-test-1
+server:
+  port: 8090
+
+spring.datasource:
+  url: jdbc:mysql://localhost:13306/saml-test
+  username: root
+  password: 12345678
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+app:
+  saml:
+    default-asserting-party:
+      name: dummyidp
+      metadata-location: https://dummyidp.com/apps/app_01k242mjhvb51swtn3wbq37dmb/metadata
+    relying-party:
+      # openssl req -newkey rsa:2048 -nodes -keyout rp-key.key -x509 -days 365 -out rp-certificate.crt
+      signing-cert-location: /config/rp-certificate.crt
+      signing-key-location: /config/rp-key.key
+  auth:
+    kf-name:
+    ks-alias:
+    ks-pass:
+    admin-user:
+      email: admin@example.com
+      password: admin
+  crypto:
+    password:
+    salt:
+
+logging.level.org.springframework.security: TRACE
+logging.level.com.example.config: TRACE
