@@ -3,6 +3,7 @@ package com.example.config;
 import com.example.dto.UserAuthCode;
 import com.example.dto.UserAuthority;
 import com.example.entity.User;
+import com.example.repository.AuthProviderRepository;
 import com.example.service.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jose.jwk.JWKSet;
@@ -11,6 +12,7 @@ import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
 import lombok.RequiredArgsConstructor;
+import org.opensaml.security.x509.X509Support;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -22,6 +24,7 @@ import org.springframework.security.authentication.dao.DaoAuthenticationProvider
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.converter.RsaKeyConverters;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.encrypt.Encryptors;
@@ -45,7 +48,12 @@ import org.springframework.security.oauth2.server.authorization.token.JwtEncodin
 import org.springframework.security.oauth2.server.authorization.token.JwtGenerator;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
+import org.springframework.security.saml2.core.Saml2X509Credential;
+import org.springframework.security.saml2.provider.service.registration.InMemoryRelyingPartyRegistrationRepository;
+import org.springframework.security.saml2.provider.service.registration.RelyingPartyRegistrationRepository;
+import org.springframework.security.saml2.provider.service.registration.RelyingPartyRegistrations;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.DelegatingAuthenticationConverter;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
@@ -182,6 +190,33 @@ public class AuthConfig {
         return new DelegatingOAuth2TokenGenerator(
                 jwtGenerator
         );
+    }
+
+    @Bean
+    public RelyingPartyRegistrationRepository relyingPartyRegistrations(AuthProviderRepository authProviderRepository) throws Exception {
+        var signingCertResource = new ClassPathResource(properties.saml().relyingParty().signingCertLocation());
+        var signingKeyResource = new ClassPathResource(properties.saml().relyingParty().signingKeyLocation());
+        try (
+                var rpSigningCert = signingCertResource.getInputStream();
+                var rpSigningKey = signingKeyResource.getInputStream()
+        ) {
+            var rpCertificate = X509Support.decodeCertificate(rpSigningCert.readAllBytes());
+            var rpKey = RsaKeyConverters.pkcs8().convert(rpSigningKey);
+            assert rpCertificate != null;
+            assert rpKey != null;
+            var rpSigningCredentials = Saml2X509Credential.signing(rpKey, rpCertificate);
+
+            var authProviders = authProviderRepository.findAll();
+            var authRegistrations = authProviders.stream()
+                    .map(provider ->
+                            RelyingPartyRegistrations
+                                    .fromMetadataLocation(provider.getMetadataLocation())
+                                    .registrationId(provider.getName())
+                                    .signingX509Credentials(c -> c.add(rpSigningCredentials))
+                                    .build())
+                    .toList();
+            return new InMemoryRelyingPartyRegistrationRepository(authRegistrations);
+        }
     }
 
     @Bean
