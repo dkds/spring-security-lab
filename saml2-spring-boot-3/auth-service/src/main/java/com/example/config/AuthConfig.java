@@ -3,6 +3,7 @@ package com.example.config;
 import com.example.dto.UserAuthCode;
 import com.example.dto.UserAuthority;
 import com.example.entity.User;
+import com.example.exceptions.UserNotFoundException;
 import com.example.repository.AuthProviderRepository;
 import com.example.service.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -49,6 +50,8 @@ import org.springframework.security.oauth2.server.authorization.token.JwtGenerat
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
 import org.springframework.security.saml2.core.Saml2X509Credential;
+import org.springframework.security.saml2.provider.service.authentication.DefaultSaml2AuthenticatedPrincipal;
+import org.springframework.security.saml2.provider.service.authentication.Saml2Authentication;
 import org.springframework.security.saml2.provider.service.registration.InMemoryRelyingPartyRegistrationRepository;
 import org.springframework.security.saml2.provider.service.registration.RelyingPartyRegistrationRepository;
 import org.springframework.security.saml2.provider.service.registration.RelyingPartyRegistrations;
@@ -65,6 +68,7 @@ import java.security.KeyStore;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Collections;
@@ -101,6 +105,30 @@ public class AuthConfig {
         var daoAuthenticationProvider = new DaoAuthenticationProvider(userService);
         daoAuthenticationProvider.setPasswordEncoder(passwordEncoder);
         return daoAuthenticationProvider;
+    }
+
+    @Bean
+    public AuthenticationSuccessHandler ssoAuthenticationSuccessHandler(UserService userService, ObjectMapper objectMapper, TextEncryptor textEncryptor) {
+        return (_, response, authentication) -> {
+            if (authentication instanceof Saml2Authentication saml2Authentication
+                    && saml2Authentication.getPrincipal() instanceof DefaultSaml2AuthenticatedPrincipal principle) {
+                var username = principle.getName();
+                var userDetails = userService.loadUserByUsername(username);
+                if (userDetails == null) {
+                    throw new UserNotFoundException(username);
+                }
+
+                var issuedAt = Instant.now();
+                var expiresAt = issuedAt.plus(30, ChronoUnit.SECONDS);
+                var userAuthCode = new UserAuthCode(username, expiresAt.getEpochSecond());
+                var userAuthCodeJson = objectMapper.writeValueAsString(userAuthCode);
+                var code = textEncryptor.encrypt(userAuthCodeJson);
+
+                response.sendRedirect("http://localhost:3000/login/sso/exchange?code=" + code);
+            } else {
+                throw new IllegalArgumentException("Unsupported authentication type");
+            }
+        };
     }
 
     @SuppressWarnings("removal")
@@ -222,6 +250,7 @@ public class AuthConfig {
     @Bean
     @Order(1)
     public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity,
+                                                   AuthenticationSuccessHandler ssoAuthenticationSuccessHandler,
                                                    PasswordAuthenticationConverter passwordAuthenticationConverter,
                                                    UserAuthCodeAuthenticationConverter userAuthCodeAuthenticationConverter,
                                                    DaoAuthenticationProvider daoAuthenticationProvider,
@@ -247,7 +276,7 @@ public class AuthConfig {
                 .authorizeHttpRequests(authorizeRequests ->
                         authorizeRequests.anyRequest().authenticated()
                 )
-                .saml2Login(withDefaults())
+                .saml2Login(saml -> saml.successHandler(ssoAuthenticationSuccessHandler))
                 .saml2Logout(withDefaults())
                 .saml2Metadata(withDefaults())
                 .authenticationProvider(new PasswordAuthenticationProvider(daoAuthenticationProvider, tokenGenerator))
