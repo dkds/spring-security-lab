@@ -1,8 +1,7 @@
 import { BrowserRouter, Route, Routes } from "react-router";
-import "./App.css";
-import Home from "./pages/Home";
 import Callback from "./pages/Callback";
 import Dashboard from "./pages/Dashboard";
+import Home from "./pages/Home";
 
 export default function App() {
   return (
