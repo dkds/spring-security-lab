@@ -1,0 +1,14 @@
+services:
+  db:
+    image: mysql:8.0.19
+    environment:
+      MYSQL_DATABASE: mydatabase
+      MYSQL_ROOT_PASSWORD: root@1234
+    restart: always
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 3s
+      retries: 5
+      start_period: 30s
+    ports:
+      - '13307:3306'
