@@ -27,7 +27,7 @@ cd ui              && pnpm install && pnpm dev
 sequenceDiagram
     actor User
     participant UI as ui (client)
-    participant A as auth-service (auth server)
+    participant A as auth server
     participant RS as resource-server (API)
     User->>UI: open app
     UI->>A: authorization code request (+ PKCE)
