@@ -12,11 +12,11 @@ instructions, and its flow diagram.
 
 ## Scenarios
 
-| Scenario | Focus |
-|---|---|
-| [`oauth2-spring-boot-3`](./oauth2-spring-boot-3) | OAuth 2.1 authorization-code flow with a customizable login page (Spring Boot 3) |
-| [`saml2-spring-boot-3`](./saml2-spring-boot-3) | SAML2 single sign-on with Keycloak (Spring Boot 3) |
-| [`spring-boot-4`](spring-boot-4) | The same authorization-code flow on Spring Boot 4, with a resource server |
+| Scenario                                           | Focus |
+|----------------------------------------------------|---|
+| [`oauth2-spring-boot-3`](./oauth2-spring-boot-3)   | OAuth 2.1 authorization-code flow with a customizable login page (Spring Boot 3) |
+| [`saml2-spring-boot-3`](./saml2-spring-boot-3)     | SAML2 single sign-on with Keycloak (Spring Boot 3) |
+| [`spring-boot-4-minimal`](./spring-boot-4-minimal) | The same authorization-code flow on Spring Boot 4, with a resource server |
 
 ---
 
