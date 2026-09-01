@@ -1,0 +1,64 @@
+# spring-boot-4-full/auth-server/compose.yaml
+#
+# One-time setup for the shared network (see resource-server/compose.yaml):
+#   docker network create lab-net
+#
+# Run:  docker compose up -d
+# Stop: docker compose down          (data survives)
+#       docker compose down -v && rm -rf .data   (full reset)
+
+name: lab-auth-server
+
+services:
+  auth-db:
+    image: mysql:8.4
+    container_name: lab-auth-db
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+00:00
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpw}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-authdb}
+      MYSQL_USER: ${MYSQL_USER:-authuser}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-authpw}
+    ports:
+      - "${MYSQL_HOST_PORT:-3307}:3306"
+    volumes:
+      - ./.data/mysql:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping -h 127.0.0.1 -u root -p"$$MYSQL_ROOT_PASSWORD" --silent
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - lab-net
+
+networks:
+  lab-net:
+    name: lab-net
+    external: true
+
+# ---------------------------------------------------------------------------
+# Later, for the multi-instance experiment (Phase 8), add alongside auth-db:
+#
+#   auth-server:
+#     build: .
+#     deploy:
+#       replicas: 2
+#     environment:
+#       SPRING_DATASOURCE_URL: jdbc:mysql://auth-db:3306/authdb?...
+#     depends_on:
+#       auth-db:
+#         condition: service_healthy
+#     networks: [lab-net]
+#
+# Do not set container_name on that service — it prevents replicas.
+# Note that the in-memory RSA signing key must be persisted first, or the two
+# replicas will sign with different keys and reject each other's tokens.
+# ---------------------------------------------------------------------------

@@ -1,0 +1,45 @@
+# spring-boot-4-full/resource-server/compose.yaml
+#
+# One-time setup for the shared network (also used by auth-server/compose.yaml):
+#   docker network create lab-net
+#
+# Run:  docker compose up -d
+# Stop: docker compose down          (data survives)
+#       docker compose down -v && rm -rf .data   (full reset)
+
+name: lab-resource-server
+
+services:
+  resource-db:
+    image: mysql:8.4
+    container_name: lab-resource-db
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+00:00
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpw}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-resourcedb}
+      MYSQL_USER: ${MYSQL_USER:-resourceuser}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-resourcepw}
+    ports:
+      - "${MYSQL_HOST_PORT:-3308}:3306"
+    volumes:
+      - ./.data/mysql:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping -h 127.0.0.1 -u root -p"$$MYSQL_ROOT_PASSWORD" --silent
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - lab-net
+
+networks:
+  lab-net:
+    name: lab-net
+    external: true
