@@ -5,6 +5,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+/// Global security configuration beans.
+/// Filter chains are defined in the SecurityChains class.
 @Configuration
 public class SecurityConfig {
 

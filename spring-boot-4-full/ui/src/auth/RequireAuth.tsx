@@ -1,31 +1,29 @@
-import { useEffect } from 'react'
-import { useLocation, Navigate } from 'react-router-dom'
-import { useAuth } from './AuthContext'
+import type { ReactNode } from 'react';
+import { useAuth } from 'react-oidc-context';
 
 interface RequireAuthProps {
-  children: React.ReactNode
+  children: ReactNode;
 }
 
 /**
- * Route guard. If the user is not authenticated, starts the OAuth2 login
- * flow with the current path saved as the post-login return destination.
+ * Protected route component.
+ * Initiates the OAuth2 redirect if the user is not authenticated.
+ * react-oidc-context saves the current location and restores it after login.
  */
-export function RequireAuth({ children }: RequireAuthProps) {
-  const { authenticated, login } = useAuth()
-  const location = useLocation()
+function RequireAuth({ children }: RequireAuthProps) {
+  const auth = useAuth();
 
-  useEffect(() => {
-    if (!authenticated) {
-      const returnTo = location.pathname + location.search
-      login(returnTo)
-    }
-  }, [authenticated, login, location])
-
-  if (!authenticated) {
-    // Show nothing while the redirect is in flight.
-    // Fallback to /login for environments where the redirect is slow.
-    return <Navigate to="/login" state={{ from: location }} replace />
+  if (auth.isLoading) {
+    return <div className="loading">Loading authentication...</div>;
   }
 
-  return <>{children}</>
+  if (!auth.isAuthenticated) {
+    // Initiate PKCE flow directly — no intermediate /login page needed.
+    auth.signinRedirect();
+    return null;
+  }
+
+  return <>{children}</>;
 }
+
+export default RequireAuth;

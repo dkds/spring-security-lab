@@ -1,34 +1,25 @@
-import { useEffect } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
-import { useAuth } from '../auth/AuthContext'
+import { useEffect } from 'react';
+import { useAuth } from 'react-oidc-context';
 
 /**
- * Public login page.
- *
- * If the user is already authenticated, redirect them straight to /dashboard.
- * Otherwise, immediately kick off the OAuth2 authorization code + PKCE flow.
- * The auth-server will present its own login form (and OTT / SAML2 options).
+ * Login page - immediately initiates the OAuth2 redirect to auth-server.
+ * The user should never see this page for more than a brief moment before
+ * being redirected to the auth-server's login screen.
  */
-export default function LoginPage() {
-  const { authenticated, login } = useAuth()
-  const navigate = useNavigate()
-  const location = useLocation()
-  const from: string = (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/dashboard'
+function LoginPage() {
+  const auth = useAuth();
 
   useEffect(() => {
-    if (authenticated) {
-      navigate(from, { replace: true })
-    } else {
-      login(from)
+    if (!auth.isLoading && !auth.isAuthenticated) {
+      auth.signinRedirect();
     }
-  }, [authenticated, from, login, navigate])
+  }, [auth.isLoading, auth.isAuthenticated]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50">
-      <div className="flex flex-col items-center gap-4 rounded-2xl bg-white p-10 shadow-md">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
-        <p className="text-sm text-gray-500">Redirecting to login&hellip;</p>
-      </div>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+      <p>Redirecting to login...</p>
     </div>
-  )
+  );
 }
+
+export default LoginPage;

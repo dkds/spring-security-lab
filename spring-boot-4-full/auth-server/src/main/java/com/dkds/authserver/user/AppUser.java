@@ -46,4 +46,12 @@ public class AppUser {
         this.lockedUntil = null;
         this.failedAttempts = 0;
     }
+
+    /// Whether the user's password has expired and must be changed.
+    /// Per DESIGN.md, an expired password is a terminal rejection that routes
+    /// to a change-password screen. No password-expiry column exists in the
+    /// schema yet, so this returns false until that feature is added.
+    public boolean isPasswordExpired() {
+        return false;
+    }
 }

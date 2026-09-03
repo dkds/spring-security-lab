@@ -6,7 +6,7 @@ import lombok.*;
 
 @Entity
 @Table(name = "membership", uniqueConstraints = {
-    @UniqueConstraint(columnNames = {"user_id", "org_id"})
+        @UniqueConstraint(columnNames = {"user_id", "org_id"})
 })
 @IdClass(MembershipId.class)
 @Getter

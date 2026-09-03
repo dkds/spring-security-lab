@@ -8,7 +8,7 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "user_verification", uniqueConstraints = {
-    @UniqueConstraint(columnNames = {"user_id", "method"})
+        @UniqueConstraint(columnNames = {"user_id", "method"})
 })
 @Getter
 @Setter

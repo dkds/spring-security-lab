@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 9000
 
 spring:
   application:
@@ -13,3 +13,14 @@ spring:
     hibernate:
       ddl-auto: update
     open-in-view: false
+
+# OAuth2 authorization server settings.
+# issuer must resolve to a URL reachable by the SPA and resource server.
+app:
+  oauth2:
+    issuer: http://localhost:9000
+    spa-redirect-uri: http://localhost:5173/callback
+
+logging:
+  level:
+    org.springframework.security: TRACE
