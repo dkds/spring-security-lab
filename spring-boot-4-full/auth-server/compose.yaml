@@ -39,6 +39,16 @@ services:
     networks:
       - lab-net
 
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: lab-auth-mailpit
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"   # SMTP — auth-server sends here
+      - "${MAILPIT_UI_PORT:-8025}:8025"     # Web UI — view emails in browser
+    networks:
+      - lab-net
+
 networks:
   lab-net:
     name: lab-net

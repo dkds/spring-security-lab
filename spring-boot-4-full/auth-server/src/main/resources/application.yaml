@@ -14,6 +14,16 @@ spring:
       ddl-auto: update
     open-in-view: false
 
+  mail:
+    host: localhost
+    port: 1025
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
 # OAuth2 authorization server settings.
 # issuer must resolve to a URL reachable by the SPA and resource server.
 app:

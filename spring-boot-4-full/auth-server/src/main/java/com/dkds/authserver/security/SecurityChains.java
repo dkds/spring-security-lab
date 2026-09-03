@@ -1,6 +1,8 @@
 package com.dkds.authserver.security;
 
 import com.dkds.authserver.login.FormLoginConfigurer;
+import com.dkds.authserver.onetimetoken.EmailOttDeliveryHandler;
+import com.dkds.authserver.onetimetoken.OneTimeTokenConfigurer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
@@ -11,8 +13,10 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.config.annotation.web.configurers.oauth2.server.authorization.OAuth2AuthorizationServerConfigurer;
+import org.springframework.security.config.annotation.authorization.EnableMultiFactorAuthentication;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
+import org.springframework.security.web.authentication.ott.GenerateOneTimeTokenFilter;
 
 /// Defines exactly three filter chains, in the order mandated by DESIGN.md.
 ///
@@ -24,7 +28,10 @@ import org.springframework.security.web.authentication.LoginUrlAuthenticationEnt
 @Configuration
 @RequiredArgsConstructor
 @Slf4j
+@EnableMultiFactorAuthentication(authorities = {})
 public class SecurityChains {
+
+    private final OneTimeTokenConfigurer oneTimeTokenConfigurer;
 
     /// Chain 1: Authorization server + OIDC endpoints.
     ///
@@ -87,8 +94,15 @@ public class SecurityChains {
         http
                 .authorizeHttpRequests(authz -> authz
                         .requestMatchers(SecurityConstants.LOGIN_PAGE).permitAll()
+                        // A principal mid-MFA-gate holds FACTOR_PASSWORD but not
+                        // yet FACTOR_OTT, so the composed authorization manager
+                        // would otherwise deny these two OTT endpoints before the
+                        // user can ever submit their code.
+                        .requestMatchers(EmailOttDeliveryHandler.OTT_INPUT_URL).permitAll()
+                        .requestMatchers(GenerateOneTimeTokenFilter.DEFAULT_GENERATE_URL).permitAll()
                         .anyRequest().authenticated())
-                .with(new FormLoginConfigurer(), Customizer.withDefaults());
+                .with(new FormLoginConfigurer(), Customizer.withDefaults())
+                .with(oneTimeTokenConfigurer, Customizer.withDefaults());
 
         return http.build();
     }
