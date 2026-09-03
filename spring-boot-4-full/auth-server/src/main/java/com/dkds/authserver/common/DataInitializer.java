@@ -5,6 +5,7 @@ import com.dkds.authserver.authorization.UserVerificationRepository;
 import com.dkds.authserver.organization.*;
 import com.dkds.authserver.user.AppUser;
 import com.dkds.authserver.user.UserRepository;
+import com.dkds.authserver.user.UserRole;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -159,6 +160,7 @@ public class DataInitializer {
                 .passwordHash(passwordEncoder.encode("adminpw"))
                 .enabled(true)
                 .failedAttempts(0)
+                .role(UserRole.PLATFORM_ADMIN)
                 .build();
         admin = userRepository.save(admin);
 

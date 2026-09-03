@@ -2,9 +2,7 @@ package com.dkds.authserver.authorization;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.authorization.AuthorizationManagerFactory;
-import org.springframework.security.authorization.DefaultAuthorizationManagerFactory;
-import org.springframework.security.authorization.RequiredAuthoritiesAuthorizationManager;
+import org.springframework.security.authorization.*;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 
 /// Publishes the {@link AuthorizationManagerFactory} bean that
@@ -18,14 +16,21 @@ import org.springframework.security.web.access.intercept.RequestAuthorizationCon
 /// non-empty. Without a bean here, every `.authenticated()` rule on every
 /// chain falls back to a plain `AuthenticatedAuthorizationManager` that knows
 /// nothing about factors, and no org-policy MFA requirement is ever enforced.
+///
+/// Per DESIGN.md Phase 5: `additionalAuthorization` composes the OTT-factor
+/// policy with the IP-restriction policy via
+/// `AuthorizationManagers.allOf(orgPolicy, ipPolicy)` — both must grant (or
+/// abstain) for a request to pass.
 @Configuration
 public class AuthorizationPolicyConfig {
 
     @Bean
     public AuthorizationManagerFactory<RequestAuthorizationContext> authorizationManagerFactory(
-            OrgPolicyRequiredAuthoritiesRepository orgPolicyRepository) {
+            OrgPolicyRequiredAuthoritiesRepository orgPolicyRepository,
+            OrgIpAuthorizationManager ipAuthorizationManager) {
         var factory = new DefaultAuthorizationManagerFactory<RequestAuthorizationContext>();
-        factory.setAdditionalAuthorization(new RequiredAuthoritiesAuthorizationManager<>(orgPolicyRepository));
+        AuthorizationManager<RequestAuthorizationContext> ottPolicy = new RequiredAuthoritiesAuthorizationManager<>(orgPolicyRepository);
+        factory.setAdditionalAuthorization(AuthorizationManagers.allOf(ottPolicy, ipAuthorizationManager));
         return factory;
     }
 }

@@ -174,7 +174,7 @@ Regression-tested by `Phase4OttEndpointsRequirePasswordTests` (3 — anonymous `
 **Deferred (explicitly, by design, not oversight):**
 - `validDuration` demo on `/api/profile/**` — that endpoint lives on Chain 2 (STATELESS JWT resource server), whose `JwtAuthenticationConverter`/factor-claim propagation is Phase 6 work; `AccessTokenCustomizer` today only adds `ROLE_` authorities, not `FACTOR_` ones
 - OTT invalidation "on password change" — no password-change feature exists yet to hook into (DESIGN.md only sketches it as a future `CredentialsExpiredException` flow)
-- IP policy composition (`AuthorizationManagers.allOf(orgPolicy, ipPolicy)`) — `OrgIpAuthorizationManager` doesn't exist yet; `AuthorizationPolicyConfig` wires `orgPolicy` alone for now, Phase 5 adds the composition
+- IP policy composition (`AuthorizationManagers.allOf(orgPolicy, ipPolicy)`) — done in Phase 5, see below
 
 **Tests:** `Phase4AuthorizationPolicyTests` (7 — strictest-wins, interval-satisfied, fail-closed, admin-membership-link, no-qualifying-membership, inactive-membership-ignored, unknown-username-requires-nothing), `Phase4LoginRecordingTests` (2), `Phase4OttAttemptCapTests` (3, unit-level against the handler directly), `Phase4Chain1MissingFactorTests` (1, full `MockMvc` end-to-end), `Phase4OttEndpointsRequirePasswordTests` (3, anonymous access denied), `Phase4LoginSuccessFallbackTests` (1, login-with-nothing-saved fallback). 25 total. Verified on both `spring-security.version=7.1.0` and `=7.1.1` per `PLAN.md`.
 
@@ -182,12 +182,29 @@ Note for anyone adding `@AutoConfigureMockMvc`-based tests in this project: Boot
 
 ---
 
+### ✅ Phase 5 — IP Restriction
+
+**Package: `authorization/`**
+- `OrgIpAuthorizationManager implements AuthorizationManager<RequestAuthorizationContext>` — for the current principal's active memberships, any org with `ip_restriction_enabled=true` must have the request's client address (`request.getRemoteAddr()`) fall inside at least one of its `org_ip_range` CIDR blocks (`IpAddressMatcher`, one framework-provided instance per range — no hand-rolled CIDR math). A single restricted org whose ranges don't cover the address denies the whole request; this is an AND across every restricted org on the user's memberships, not "any org's ranges will do." `PLATFORM_ADMIN` (checked via `ROLE_PLATFORM_ADMIN`, reconstructed locally as `"ROLE_" + UserRole.PLATFORM_ADMIN` rather than importing `SecurityConstants` — `authorization` may not depend on `security`, same rule `OrgPolicyRequiredAuthoritiesRepository` already follows) is exempt, checked first. Unknown/anonymous username → permit, same reasoning as `OrgPolicyRequiredAuthoritiesRepository`: this manager runs before the base `authenticated()` check for every request, including unauthenticated ones, so it must defer rather than fail-closed-deny anonymous traffic. Any other exception → fail closed (deny).
+- `AuthorizationPolicyConfig` now composes `AuthorizationManagers.allOf(ottPolicy, ipAuthorizationManager)` into `additionalAuthorization`, exactly as DESIGN.md specifies. `allOf` short-circuits on the first denial and returns that manager's own `AuthorizationResult` unwrapped — since `OrgIpAuthorizationManager` returns a plain `AuthorizationDecision(false)` (not `AuthorityAuthorizationDecision`/`FactorAuthorizationDecision`), an IP denial falls straight through to the ordinary `AccessDeniedHandlerImpl` (plain 403), never getting misrouted into `OneTimeTokenConfigurer`'s missing-`FACTOR_OTT` redirect handling — verified against `DelegatingMissingAuthorityAccessDeniedHandler` source, which only intercepts those two specific `AuthorizationResult` subtypes.
+
+**Package: `user/`**
+- **New `UserRole` enum** (`MEMBER`, `PLATFORM_ADMIN`) and `AppUser.role` column (`@Builder.Default MEMBER`), because this didn't exist before Phase 5 and was needed for the admin exemption. Found along the way: `AppUserDetailsService` had `.roles("MEMBER")` **hardcoded** for every user — the `admin` account `DataInitializer` seeds was never actually granted `ROLE_PLATFORM_ADMIN` at all, despite `SecurityConstants.ROLE_PLATFORM_ADMIN` existing unused since Phase 2. Fixed to `.roles(user.getRole().name())`; `DataInitializer`'s admin user now sets `.role(UserRole.PLATFORM_ADMIN)` explicitly.
+
+**Trusted proxies / `ForwardedHeaderFilter` — deliberately NOT registered.** DESIGN.md says to register Spring's `ForwardedHeaderFilter` "with trusted proxies" so `getRemoteAddr()` reflects the real client behind a reverse proxy. In practice that filter has no proxy allowlist of its own — once active it unconditionally trusts whatever `X-Forwarded-For` a caller sends, full stop. This stack has no reverse proxy in front of `auth-server` (exposed directly on :9000), so enabling it unconditionally would let any direct caller spoof past IP restriction entirely, directly contradicting PLAN.md's own required test 4 ("spoofed X-Forwarded-For not trusted"). Asked the user how to resolve this rather than guessing; confirmed: leave `server.forward-headers-strategy` at Boot's default (`none`) everywhere in this repo (explicit in `application-test.yaml`, documented at length in `SecurityConfig`), so `OrgIpAuthorizationManager`'s `getRemoteAddr()` reads are spoof-proof today. Flip it to `framework` in whatever profile actually deploys this behind a real trusted proxy.
+
+**Tests:** `Phase5IpRestrictionTests` (5 — in-range permitted, out-of-range denied, `PLATFORM_ADMIN` exempt from an out-of-range address, a non-admin still denied from that same address, spoofed `X-Forwarded-For` has no effect on the real `/oauth2/authorize` redirect path). All fixtures use RFC 5737 TEST-NET ranges (`203.0.113.0/24` in-range, `198.51.100.0/24` out-of-range) so nothing collides with a real routable address. 30 total tests. Verified on both `spring-security.version=7.1.0` and `=7.1.1`.
+
+**Known extension worth noting:** since `AuthorizationPolicyConfig`'s `AuthorizationManagerFactory` bean is global, `OrgIpAuthorizationManager` now also composes into Chain 2's (`/api/**`) `.authenticated()` check, same as the OTT policy manager already did (see Known Gap 6 below) — a bearer-token call from an IP-restricted org's member now also needs to originate from an allowed address, or it gets denied even with a perfectly valid, unexpired JWT. Not covered by any test yet (Chain 2 has none exercising `/api/**` end-to-end); worth keeping in mind for Phase 6.
+
+---
+
 ## What's Next
 
 | Phase | Topic | Status |
 |-------|-------|--------|
-| 5 | IP restriction (`OrgIpAuthorizationManager`) | 🔜 Next |
-| 6 | Resource server + `common-security` module + JWT validation | ⏳ |
+| 5 | IP restriction (`OrgIpAuthorizationManager`) | ✅ Done |
+| 6 | Resource server + `common-security` module + JWT validation | 🔜 Next |
 | 7 | SAML2 SP-initiated SSO via Keycloak | ⏳ |
 | 8 | IdP-initiated flow + identity change strategy | ⏳ |
 | 9 | Captcha filter | ⏳ |
@@ -200,7 +217,7 @@ Note for anyone adding `@AutoConfigureMockMvc`-based tests in this project: Boot
 
 ```
 auth-server:
-  Tests run: 25, Failures: 0, Errors: 0
+  Tests run: 30, Failures: 0, Errors: 0
   - AuthServerApplicationTests (1) — contextLoads
   - Phase 2: Filter Chains & Terminal Rejections (3)
   - Phase 3: MFA with One-Time Tokens (4)
@@ -210,6 +227,7 @@ auth-server:
   - Phase 4: Chain 1 missing-factor routing (1)
   - Phase 4: OTT endpoints require FACTOR_PASSWORD (3)
   - Phase 4: form login falls back to /login-success, not / (1)
+  - Phase 5: IP restriction (5)
 
 resource-server:
   Tests run: 1, Failures: 0, Errors: 0
@@ -227,4 +245,4 @@ Run with: `cd auth-server && mvn -q test`
 3. **`failedAttempts`** (lockout counter) — entity field exists but still not updated on auth failure; `last_login_at` and `user_verification.verified_at` *are* now written, via `LoginRecordingListener` (Phase 4).
 4. **`DataInitializer`** — runs once (guarded by checking for `user1`), not on every startup as previously noted here; guarded by `app.data.seed=true` property. Do not enable in production. Its seeded `user_verification` rows are timestamped at first-ever seed time, so a freshly-seeded `user2` (DAILY org) won't be prompted for OTT until that timestamp ages past 24h — expected, not a bug, if you're testing the MFA gate manually right after a first run.
 5. **`ddl-auto: update`** — fine for dev/POC; must change to `validate` before any production use.
-6. **Chain 2 (`/api/**`) and the org-policy MFA check** — since `AuthorizationPolicyConfig`'s bean is global, it now also composes into Chain 2's `.authenticated()`. For `NEVER`-mode orgs this is a no-op (empty requirement list). For orgs with an active MFA interval, once `verified_at` goes stale mid-token-lifetime, `/api/**` calls will start being denied even though the bearer token hasn't expired, because the JWT-derived authentication doesn't carry `FACTOR_OTT`/`FACTOR_PASSWORD` claims (`AccessTokenCustomizer` only adds `ROLE_` today). Arguably a reasonable defense-in-depth property, but worth knowing about before Phase 6 (`JwtAuthenticationConverter`) addresses it properly.
+6. **Chain 2 (`/api/**`) and the composed org-policy checks** — since `AuthorizationPolicyConfig`'s bean is global, it now also composes into Chain 2's `.authenticated()`, for both halves: the OTT policy manager and (as of Phase 5) `OrgIpAuthorizationManager`. For `NEVER`-mode/non-IP-restricted orgs this is a no-op. For orgs with an active MFA interval, once `verified_at` goes stale mid-token-lifetime, `/api/**` calls will start being denied even though the bearer token hasn't expired, because the JWT-derived authentication doesn't carry `FACTOR_OTT`/`FACTOR_PASSWORD` claims (`AccessTokenCustomizer` only adds `ROLE_` today). Likewise, a bearer-token call from an IP-restricted org's member now also needs to originate from an allowed address. Arguably reasonable defense-in-depth in both cases, but worth knowing about before Phase 6 (`JwtAuthenticationConverter`) addresses the MFA-claim half properly. Neither is covered by a Chain-2-specific test yet.

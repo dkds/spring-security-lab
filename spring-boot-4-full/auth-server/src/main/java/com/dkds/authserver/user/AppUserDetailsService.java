@@ -43,7 +43,7 @@ public class AppUserDetailsService implements UserDetailsService {
         return User.builder()
                 .username(user.getUsername())
                 .password(user.getPasswordHash())
-                .roles("MEMBER")
+                .roles(user.getRole().name())
                 .disabled(!user.getEnabled())
                 .accountLocked(user.isLocked())
                 .accountExpired(!userService.hasActiveMembership(username))

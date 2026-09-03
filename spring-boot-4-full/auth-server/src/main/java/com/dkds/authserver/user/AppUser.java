@@ -26,6 +26,11 @@ public class AppUser {
     @Column(nullable = false)
     private Boolean enabled;
 
+    @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private UserRole role = UserRole.MEMBER;
+
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
 
