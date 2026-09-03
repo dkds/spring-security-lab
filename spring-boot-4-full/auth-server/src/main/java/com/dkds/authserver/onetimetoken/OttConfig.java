@@ -26,9 +26,17 @@ public class OttConfig {
     }
 
     @Bean
+    public OttAuthenticationFailureHandler ottAuthenticationFailureHandler(
+            OneTimeTokenRepository oneTimeTokenRepository) {
+        return new OttAuthenticationFailureHandler(oneTimeTokenRepository);
+    }
+
+    @Bean
     public OneTimeTokenConfigurer oneTimeTokenConfigurer(
             NumericOneTimeTokenService numericOneTimeTokenService,
-            OneTimeTokenGenerationSuccessHandler ottDeliveryHandler) {
-        return new OneTimeTokenConfigurer(numericOneTimeTokenService, ottDeliveryHandler);
+            OneTimeTokenGenerationSuccessHandler ottDeliveryHandler,
+            OttAuthenticationFailureHandler ottAuthenticationFailureHandler) {
+        return new OneTimeTokenConfigurer(
+                numericOneTimeTokenService, ottDeliveryHandler, ottAuthenticationFailureHandler);
     }
 }

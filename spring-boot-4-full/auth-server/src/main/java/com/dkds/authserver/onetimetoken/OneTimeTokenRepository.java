@@ -14,8 +14,14 @@ public interface OneTimeTokenRepository extends JpaRepository<OneTimeToken, Stri
 
     Optional<OneTimeToken> findByTokenValueAndExpiresAtAfter(String tokenValue, Instant now);
 
+    Optional<OneTimeToken> findByUsername(String username);
+
     @Modifying
     @Transactional
     @Query("DELETE FROM OneTimeToken t WHERE t.expiresAt < :now")
     int deleteExpiredTokens(Instant now);
+
+    @Modifying
+    @Transactional
+    int deleteByUsername(String username);
 }

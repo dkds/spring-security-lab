@@ -16,6 +16,12 @@ import java.time.Instant;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserVerification {
+
+    /// The only verification method currently delivered (OTT codes go out by
+    /// email); kept as a named constant so the seed data and the policy
+    /// lookup can't drift apart.
+    public static final String METHOD_EMAIL = "EMAIL";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

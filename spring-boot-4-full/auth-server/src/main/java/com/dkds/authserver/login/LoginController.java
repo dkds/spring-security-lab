@@ -21,4 +21,11 @@ public class LoginController {
     public String ottInputPage() {
         return "ott-input";
     }
+
+    /// Landing page for a principal missing FACTOR_OTT — lets them request a
+    /// code. Template: templates/ott-request.html
+    @GetMapping(EmailOttDeliveryHandler.OTT_REQUEST_URL)
+    public String ottRequestPage() {
+        return "ott-request";
+    }
 }

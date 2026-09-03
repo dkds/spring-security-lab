@@ -78,7 +78,7 @@ public class DataInitializer {
 
         // User 2: Three organizations with different MFA modes
         var user2 = AppUser.builder()
-                .username("user2")
+                .username("user2@dkds.com")
                 .passwordHash(passwordEncoder.encode("password2"))
                 .enabled(true)
                 .failedAttempts(0)
@@ -234,14 +234,14 @@ public class DataInitializer {
         // Add some user verifications
         var user1EmailVerif = UserVerification.builder()
                 .user(user1)
-                .method("EMAIL")
+                .method(UserVerification.METHOD_EMAIL)
                 .verifiedAt(Instant.now())
                 .build();
         userVerificationRepository.save(user1EmailVerif);
 
         var user2EmailVerif = UserVerification.builder()
                 .user(user2)
-                .method("EMAIL")
+                .method(UserVerification.METHOD_EMAIL)
                 .verifiedAt(Instant.now())
                 .build();
         userVerificationRepository.save(user2EmailVerif);

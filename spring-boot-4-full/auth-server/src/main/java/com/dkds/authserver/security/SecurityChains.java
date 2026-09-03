@@ -14,9 +14,11 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.config.annotation.web.configurers.oauth2.server.authorization.OAuth2AuthorizationServerConfigurer;
 import org.springframework.security.config.annotation.authorization.EnableMultiFactorAuthentication;
+import org.springframework.security.core.authority.FactorGrantedAuthority;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.authentication.ott.GenerateOneTimeTokenFilter;
+import org.springframework.security.web.util.matcher.NegatedRequestMatcher;
 
 /// Defines exactly three filter chains, in the order mandated by DESIGN.md.
 ///
@@ -56,11 +58,30 @@ public class SecurityChains {
                 .securityMatcher(endpointsMatcher)
                 .authorizeHttpRequests(authz -> authz.anyRequest().authenticated())
                 .csrf(csrf -> csrf.ignoringRequestMatchers(endpointsMatcher))
-                // Unauthenticated browser requests to /oauth2/authorize must be
-                // redirected to the login page (Chain 3), not rejected with 401.
                 .exceptionHandling(ex -> ex
+                        // Unauthenticated browser requests to /oauth2/authorize
+                        // must be redirected to the login page (Chain 3), not
+                        // rejected with 401.
                         .authenticationEntryPoint(
-                                new LoginUrlAuthenticationEntryPoint(SecurityConstants.LOGIN_PAGE)));
+                                new LoginUrlAuthenticationEntryPoint(SecurityConstants.LOGIN_PAGE))
+                        // OneTimeTokenConfigurer registers this same
+                        // missing-FACTOR_OTT routing automatically, but only
+                        // on the HttpSecurity it's applied to (Chain 3). This
+                        // chain never carries that configurer — form login,
+                        // OTT and SAML2 all live in Chain 3 only, per
+                        // DESIGN.md — yet /oauth2/authorize (this chain) is
+                        // exactly where the composed AuthorizationManagerFactory
+                        // first denies a principal missing FACTOR_OTT. Without
+                        // this, that denial falls through to the default
+                        // AccessDeniedHandler and returns a bare 403 instead of
+                        // routing the browser to the OTT flow. Points at
+                        // OTT_REQUEST_URL, not LOGIN_PAGE — see
+                        // OneTimeTokenConfigurer for why.
+                        .defaultDeniedHandlerForMissingAuthority(
+                                ep -> ep.addEntryPointFor(
+                                        new LoginUrlAuthenticationEntryPoint(EmailOttDeliveryHandler.OTT_REQUEST_URL),
+                                        new NegatedRequestMatcher(FormLoginConfigurer.BEARER_TOKEN_MATCHER)),
+                                FactorGrantedAuthority.OTT_AUTHORITY));
 
         return http.build();
     }
@@ -99,6 +120,7 @@ public class SecurityChains {
                         // would otherwise deny these two OTT endpoints before the
                         // user can ever submit their code.
                         .requestMatchers(EmailOttDeliveryHandler.OTT_INPUT_URL).permitAll()
+                        .requestMatchers(EmailOttDeliveryHandler.OTT_REQUEST_URL).permitAll()
                         .requestMatchers(GenerateOneTimeTokenFilter.DEFAULT_GENERATE_URL).permitAll()
                         .anyRequest().authenticated())
                 .with(new FormLoginConfigurer(), Customizer.withDefaults())

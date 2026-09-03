@@ -25,6 +25,19 @@ public class EmailOttDeliveryHandler implements OneTimeTokenGenerationSuccessHan
 
     public static final String OTT_INPUT_URL = "/ott/input";
 
+    /// Landing page for a principal missing FACTOR_OTT: explains that a code
+    /// is needed and lets them request one. Deliberately separate from
+    /// SecurityConstants.LOGIN_PAGE — that page only knows how to render a
+    /// username/password form, and a principal who lands here has already
+    /// authenticated with a password; showing them that form again just
+    /// re-submits the same credentials and loops back to the same denial.
+    public static final String OTT_REQUEST_URL = "/ott/request";
+
+    /// Session attribute naming which user the current OTT challenge is
+    /// for, so {@link OttAuthenticationFailureHandler} knows whose
+    /// outstanding code to invalidate once the attempt cap is hit.
+    public static final String PENDING_USERNAME_SESSION_KEY = "ott.pendingUsername";
+
     private final JavaMailSender mailSender;
     private final String fromAddress;
 
@@ -37,6 +50,9 @@ public class EmailOttDeliveryHandler implements OneTimeTokenGenerationSuccessHan
                        HttpServletResponse response,
                        OneTimeToken oneTimeToken) throws IOException {
         sendEmail(oneTimeToken);
+        var session = request.getSession();
+        session.setAttribute(PENDING_USERNAME_SESSION_KEY, oneTimeToken.getUsername());
+        session.removeAttribute(OttAuthenticationFailureHandler.FAILED_ATTEMPTS_SESSION_KEY);
         redirect.handle(request, response, oneTimeToken);
     }
 

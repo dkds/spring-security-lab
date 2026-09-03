@@ -28,7 +28,9 @@ public class FormLoginConfigurer
         extends AbstractHttpConfigurer<FormLoginConfigurer, HttpSecurity> {
 
     /// Matches requests carrying a Bearer token in the Authorization header.
-    private static final RequestMatcher BEARER_TOKEN_MATCHER =
+    /// Public so SecurityChains can reuse it for Chain 1's own
+    /// missing-FACTOR_OTT entry point — see the comment there.
+    public static final RequestMatcher BEARER_TOKEN_MATCHER =
             new RequestHeaderRequestMatcher("Authorization", "Bearer ");
 
     @Override

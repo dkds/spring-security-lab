@@ -38,7 +38,11 @@ public class NumericOneTimeTokenService implements OneTimeTokenService {
         var code = generateNumericCode();
         var expiresAt = clock.instant().plus(TTL);
 
-        // Remove any existing token for this user to avoid stale codes.
+        // At most one outstanding code per user: a fresh request always
+        // supersedes whatever code (if any) is still live for them.
+        repository.deleteByUsername(request.getUsername());
+        // token_value is the PK, so also guard against the rare case where
+        // the freshly generated code collides with someone else's live one.
         repository.findById(code).ifPresent(t -> repository.deleteById(t.getTokenValue()));
 
         var entity = OneTimeToken.builder()
