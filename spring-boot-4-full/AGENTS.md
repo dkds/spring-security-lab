@@ -13,7 +13,15 @@ Multi-tenant Spring Security Authorization Server POC.
 |--------|------|----|
 | `auth-server` | 9000 | `authdb` (MySQL on `mysql-auth:13306`) |
 | `resource-server` | 8082 | `resourcedb` (MySQL on `mysql-resource:13307`) |
+| `common-security` | — | — (library jar, not a runnable app) |
 | `ui` | 5173 (dev) | — |
+
+`common-security` is a standalone Maven module (own `pom.xml`), **not** a reactor child — `auth-server` and `resource-server` depend on it by Maven coordinates (`com.dkds:common-security:0.0.1-SNAPSHOT`), same as any third-party jar. Build and `mvn install` it to the local repo before building either consumer:
+```bash
+cd common-security && mvn install -q
+cd ../auth-server && mvn test
+cd ../resource-server && mvn test
+```
 
 **Stack:** Java 25, Spring Boot 4.1.0, Spring Security 7.1.0, Maven, Vite/React, pnpm
 
@@ -199,13 +207,49 @@ Note for anyone adding `@AutoConfigureMockMvc`-based tests in this project: Boot
 
 ---
 
+### ✅ Phase 6 — Resource Server + `common-security` Module + JWT Validation
+
+**Structural decision, asked up front rather than guessed:** PLAN.md's Phase 0 called for a Maven reactor with `common-security` as a child module, but that was never built — `auth-server` and `resource-server` have been two fully independent standalone Maven projects since Phase 0, undocumented as a deviation until now. Rather than silently duplicate the shared JWT resource-server config into both apps, or silently retrofit a full reactor (a much bigger structural change touching every existing `pom.xml`), asked the user: created `common-security` as its own standalone Maven module (own `pom.xml`, `mvn install`ed to the local repo), consumed by both apps as an ordinary Maven dependency. Smallest change that still gets a genuinely shared, independently-testable module.
+
+**New module: `common-security`** (`com.dkds.commonsecurity`)
+- `RolesAndScopesJwtGrantedAuthoritiesConverter implements Converter<Jwt, Collection<GrantedAuthority>>` — merges Spring's own default scope-derived authorities (`SCOPE_*`, from the standard `scope`/`scp` claim) with a second `JwtGrantedAuthoritiesConverter` configured for a `roles` claim → `ROLE_*`. Its `ROLES_CLAIM_NAME`/`ROLE_AUTHORITY_PREFIX` constants are the explicit, compile-time-checked contract between the token issuer (auth-server's `AccessTokenCustomizer`) and every consumer (auth-server's own Chain 2, and any resource server) — both ends reference the same constants instead of each hardcoding the literal string `"roles"`.
+- `ResourceServerSecurityConfig` — the **complete** chain for a stateless JWT resource server with no other security concerns: `SessionCreationPolicy.STATELESS`, CSRF off, CORS on (looks up a `CorsConfigurationSource` bean from whichever app imports it), `anyRequest().authenticated()`, `.oauth2ResourceServer(oauth2 -> oauth2.jwt(...))` wired to a `JwtAuthenticationConverter` bean built from the converter above. Published as a full `SecurityFilterChain` **bean**, not a `Customizer<HttpSecurity>` one — deliberately, per PLAN.md's own test 3 (below) and the same footgun already documented on `FormLoginConfigurer`/`OneTimeTokenConfigurer`: a `Customizer<HttpSecurity>` bean gets applied ambiently to *every* chain being built anywhere in the importing app's context, which would be actively wrong here.
+- `auth-server` does **not** `@Import` `ResourceServerSecurityConfig` — that would add a fourth chain on top of its existing three and break Phase 2's "exactly three chains" test. It depends on `common-security` only for the reusable converter class, wiring its own `JwtAuthenticationConverter` bean directly in `token/JwkConfig.java` and passing it into Chain 2's `.oauth2ResourceServer(...)`. `resource-server` has no other security concerns, so it `@Import`s `ResourceServerSecurityConfig` wholesale from `ResourceServerApplication`.
+
+**Real bug found and fixed: access tokens carried no role information at all.** `AccessTokenCustomizer` only ever enriched the **ID token** (`if (OidcParameterNames.ID_TOKEN.equals(...))`) — the **access token**, which is the only thing any resource server or Chain 2 actually receives as a Bearer token, carried nothing beyond the standard registered claims and whatever scopes were requested. Every `JwtAuthenticationConverter` anywhere in this codebase was therefore only ever going to be able to derive `SCOPE_*` authorities, never `ROLE_*` — "realistic access-token claim set" (PLAN.md's own Phase 6 wording) didn't exist before this phase. Fixed by widening the customizer's guard to also fire for `OAuth2TokenType.ACCESS_TOKEN`.
+
+**Package `resource-server/`** (previously just a bare `@SpringBootApplication` + a `ResourceServerApplicationTests` that didn't even compile a working context — see below)
+- `ProfileController` — `GET /api/profile`, a minimal demo endpoint that echoes back the validated JWT's `sub`/`roles` claims plus the actually-granted authorities, proving the realistic claim set reaches a real controller.
+- `CorsConfig` — same shape as auth-server's own, allowing `localhost:5173` (the SPA).
+- `application.yaml`/`application-devpod.yaml` — added `spring.security.oauth2.resourceserver.jwt.jwk-set-uri: http://localhost:9000/oauth2/jwks`. Both auth-server and resource-server always run as normal host processes in every profile this repo has (only the databases are dockerized), so `localhost:9000` is correct regardless of profile.
+
+**Also fixed this phase (pre-existing, not introduced by it):** `resource-server`'s test suite has been broken since Phase 0 — `ResourceServerApplicationTests` had no `test` profile, no H2 dependency, and a MySQL-only `application.yaml`, so `mvn test` failed to even build the `ApplicationContext` (confirmed by running it before making any change here: `HibernateException: Unable to determine Dialect without JDBC metadata`). Added the H2 test dependency and `application-test.yaml` (mirrors auth-server's own pattern exactly) and `@ActiveProfiles("test")` on the test class.
+
+**Tests (resource-server):**
+- `Phase6ChainInventoryTests` (2) — PLAN.md test 1 verbatim: exactly one filter chain, and no `UsernamePasswordAuthenticationFilter` anywhere in it.
+- `Phase6NoAmbientCustomizerBeanTests` (1) — PLAN.md test 3 verbatim: no bean of type `Customizer<HttpSecurity>` exists anywhere in resource-server's context (which now includes everything `common-security` contributes via `@Import`). This is what actually enforces the `SecurityFilterChain`-not-`Customizer` design choice above, not just documentation of it.
+- `Phase6ProfileEndpointTests` (2) — stands in for PLAN.md test 2 ("end-to-end call from portal-ui through to resource-server"). A literal cross-process test (a live auth-server minting a real signed token, a live resource-server validating it over the network) is a manual verification step, same precedent as Phase 3's Mailpit-backed OTT flow (Known Gap 1) — there's no live-stack automation anywhere else in this repo either. What's automated instead, and is the substantive thing "end-to-end" is actually checking: `SecurityMockMvcRequestPostProcessors.jwt()` configured with a realistic `roles`+`scope` claim set, with authorities derived via the **real** `JwtAuthenticationConverter` bean pulled from context (not a fresh hand-built instance) — proving the actual wired-up chain, converter, and controller all agree, not just a unit test of the converter class in isolation. Includes the phase's negative test: no bearer token at all → 401.
+- `ResourceServerApplicationTests` (1) — now passes (see above).
+- 6 total. Verified on both `spring-security.version=7.1.0` and `=7.1.1` (`common-security`'s jar, compiled once against 7.1.0, confirmed binary-compatible when the consumer resolves 7.1.1 at its own build time — no need to rebuild it per version).
+
+**Phase 6 follow-up: shared static signing key, no more JWKS endpoint.** User asked whether the RSA key pair could be shared via `common-security` so resource servers don't need to fetch JWKS over the network. Implemented, but shared only the **public** half — sharing the private key with `resource-server` would let it forge tokens as the authorization server, which was never actually the ask (the ask was "avoid the network round-trip," not "give resource-server signing power").
+- `common-security/src/main/resources/keys/jwt-public-key.pem` — the shared RSA public key, packaged inside the jar so any consumer gets it automatically just by depending on the module. New `PemUtils` (dependency-free, plain `java.security` APIs) parses PKCS8-private/X.509-public PEM.
+- `ResourceServerSecurityConfig` now publishes its own `JwtDecoder` bean (`@ConditionalOnMissingBean`, so a consumer can still override) built directly from that shared public key via `NimbusJwtDecoder.withPublicKey(...)` — no `jwk-set-uri`, no network dependency on auth-server being reachable at validation time. Removed the now-unnecessary `spring.security.oauth2.resourceserver.jwt.*` properties from all of `resource-server`'s profiles.
+- **The private key stays auth-server-only** — `auth-server/src/main/resources/keys/jwt-signing-key.pem`, never added to `common-security`. `JwkConfig.keyPair()` was rewritten from "generate a random 2048-bit RSA pair on every boot" to "load this fixed private key and derive its public half from the loaded key's own CRT modulus/exponent" (`RSAPrivateCrtKey.getModulus()`/`getPublicExponent()` — not a second read of the PEM file). At startup it also verifies that derived public key equals `common-security`'s shared copy byte-for-byte, and fails fast (not a resource server quietly rejecting every real token later) if the two files are ever regenerated independently and drift apart.
+- **Fixes a real pre-existing fragility, not just adds a feature:** the old random-per-boot key meant every auth-server restart silently invalidated every issued token and rotated the signing key out from under any resource server that had cached the old JWKS response. A fixed key removes that whole class of transient failure — though it also means there is now no key-rotation story at all, which is fine for this POC/lab but would be a real gap in any actual deployment (see Known Gaps).
+- **Known POC-only shortcut, flagged, not hidden:** a real RSA private key is checked into `auth-server/src/main/resources/keys/jwt-signing-key.pem`. Fine for a lab; never acceptable in a real deployment — see Known Gaps.
+- New test `SharedSigningKeyRoundTripTests` (auth-server, 2) — the actual proof this works, not just that it compiles: signs a real token with auth-server's real private key (the `KeyPair` bean from context), decodes it using *only* the shared public key file, built the exact same way `ResourceServerSecurityConfig`'s own `JwtDecoder` bean builds it. Negative case: a token signed with a *different*, freshly-generated key is rejected — proving the shared key genuinely pins the trusted signer rather than any RS256 signature passing.
+- Total auth-server tests: 32. resource-server: still 6 (unaffected — its tests use `SecurityMockMvcRequestPostProcessors.jwt()`, which never touches the real `JwtDecoder` either way). Verified on both `spring-security.version=7.1.0` and `=7.1.1`.
+
+---
+
 ## What's Next
 
 | Phase | Topic | Status |
 |-------|-------|--------|
 | 5 | IP restriction (`OrgIpAuthorizationManager`) | ✅ Done |
-| 6 | Resource server + `common-security` module + JWT validation | 🔜 Next |
-| 7 | SAML2 SP-initiated SSO via Keycloak | ⏳ |
+| 6 | Resource server + `common-security` module + JWT validation | ✅ Done |
+| 7 | SAML2 SP-initiated SSO via Keycloak | 🔜 Next |
 | 8 | IdP-initiated flow + identity change strategy | ⏳ |
 | 9 | Captcha filter | ⏳ |
 | 10 | IdP MFA mapping (`AuthnContextClassRef` → `FACTOR_IDP_MFA`) | ⏳ |
@@ -217,7 +261,7 @@ Note for anyone adding `@AutoConfigureMockMvc`-based tests in this project: Boot
 
 ```
 auth-server:
-  Tests run: 30, Failures: 0, Errors: 0
+  Tests run: 32, Failures: 0, Errors: 0
   - AuthServerApplicationTests (1) — contextLoads
   - Phase 2: Filter Chains & Terminal Rejections (3)
   - Phase 3: MFA with One-Time Tokens (4)
@@ -228,13 +272,22 @@ auth-server:
   - Phase 4: OTT endpoints require FACTOR_PASSWORD (3)
   - Phase 4: form login falls back to /login-success, not / (1)
   - Phase 5: IP restriction (5)
+  - Shared signing key: no-JWKS round trip (2)
 
 resource-server:
-  Tests run: 1, Failures: 0, Errors: 0
+  Tests run: 6, Failures: 0, Errors: 0
   - ResourceServerApplicationTests (1) — contextLoads
+  - Phase 6: resource-server chain inventory (2)
+  - Phase 6: common-security publishes no ambient Customizer<HttpSecurity> bean (1)
+  - Phase 6: /api/profile — realistic access-token claims (2)
 ```
 
-Run with: `cd auth-server && mvn -q test`
+Run with:
+```bash
+cd common-security && mvn install -q   # must run first — see Project Overview
+cd ../auth-server && mvn -q test
+cd ../resource-server && mvn -q test
+```
 
 ---
 
@@ -245,4 +298,5 @@ Run with: `cd auth-server && mvn -q test`
 3. **`failedAttempts`** (lockout counter) — entity field exists but still not updated on auth failure; `last_login_at` and `user_verification.verified_at` *are* now written, via `LoginRecordingListener` (Phase 4).
 4. **`DataInitializer`** — runs once (guarded by checking for `user1`), not on every startup as previously noted here; guarded by `app.data.seed=true` property. Do not enable in production. Its seeded `user_verification` rows are timestamped at first-ever seed time, so a freshly-seeded `user2` (DAILY org) won't be prompted for OTT until that timestamp ages past 24h — expected, not a bug, if you're testing the MFA gate manually right after a first run.
 5. **`ddl-auto: update`** — fine for dev/POC; must change to `validate` before any production use.
-6. **Chain 2 (`/api/**`) and the composed org-policy checks** — since `AuthorizationPolicyConfig`'s bean is global, it now also composes into Chain 2's `.authenticated()`, for both halves: the OTT policy manager and (as of Phase 5) `OrgIpAuthorizationManager`. For `NEVER`-mode/non-IP-restricted orgs this is a no-op. For orgs with an active MFA interval, once `verified_at` goes stale mid-token-lifetime, `/api/**` calls will start being denied even though the bearer token hasn't expired, because the JWT-derived authentication doesn't carry `FACTOR_OTT`/`FACTOR_PASSWORD` claims (`AccessTokenCustomizer` only adds `ROLE_` today). Likewise, a bearer-token call from an IP-restricted org's member now also needs to originate from an allowed address. Arguably reasonable defense-in-depth in both cases, but worth knowing about before Phase 6 (`JwtAuthenticationConverter`) addresses the MFA-claim half properly. Neither is covered by a Chain-2-specific test yet.
+6. **Chain 2 (`/api/**`) and the composed org-policy checks** — since `AuthorizationPolicyConfig`'s bean is global, it now also composes into Chain 2's `.authenticated()`, for both halves: the OTT policy manager and (as of Phase 5) `OrgIpAuthorizationManager`. For `NEVER`-mode/non-IP-restricted orgs this is a no-op. For orgs with an active MFA interval, once `verified_at` goes stale mid-token-lifetime, `/api/**` calls will start being denied even though the bearer token hasn't expired, because the JWT-derived authentication doesn't carry `FACTOR_OTT`/`FACTOR_PASSWORD` claims — and this is intentional, not something Phase 6 was meant to close: `FACTOR_*` authorities are session-scoped (DESIGN.md: "issued by Spring Security on authentication"), and baking them into a portable bearer token would let a stolen/replayed token claim a factor it never actually satisfied. Phase 6 gave the access token `ROLE_*` claims, deliberately not `FACTOR_*` ones. Likewise, a bearer-token call from an IP-restricted org's member now also needs to originate from an allowed address. Neither is covered by a Chain-2-specific test yet.
+7. **A real RSA private key is checked into the repo** — `auth-server/src/main/resources/keys/jwt-signing-key.pem`, added in the Phase 6 follow-up that moved from a random-per-boot key to a fixed one shared (public half only) via `common-security`. Standard practice for a Spring Security sample/lab, never acceptable for a real deployment — a production build must load it from a real secret store, not a file in source control, and needs an actual key-rotation story (the fixed key traded that away entirely — see the Phase 6 follow-up writeup above).

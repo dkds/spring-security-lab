@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
+    driverClassName: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+
+# No spring.security.oauth2.resourceserver.jwt.* here: common-security's
+# ResourceServerSecurityConfig supplies its own JwtDecoder bean from the
+# shared public key, so there's nothing to configure — and nothing that
+# needs a live auth-server or network access during tests.

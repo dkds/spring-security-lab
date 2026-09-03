@@ -13,3 +13,8 @@ spring:
     hibernate:
       ddl-auto: update
     open-in-view: false
+
+# No spring.security.oauth2.resourceserver.jwt.* here: common-security's
+# ResourceServerSecurityConfig supplies its own JwtDecoder bean, built from
+# the shared public key packaged in that module — no JWKS endpoint, no
+# network dependency on auth-server being reachable at validation time.
