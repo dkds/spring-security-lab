@@ -22,6 +22,7 @@ public class OneTimeTokenConfigurer
     private final OneTimeTokenService oneTimeTokenService;
     private final OneTimeTokenGenerationSuccessHandler deliveryHandler;
     private final OttAuthenticationFailureHandler failureHandler;
+    private final AuthenticatedGenerateOneTimeTokenRequestResolver generateRequestResolver;
 
     @Override
     public void init(HttpSecurity http) {
@@ -71,6 +72,12 @@ public class OneTimeTokenConfigurer
                 .loginPage(EmailOttDeliveryHandler.OTT_REQUEST_URL)
                 .loginProcessingUrl(OneTimeTokenAuthenticationFilter.DEFAULT_LOGIN_PROCESSING_URL)
                 .failureHandler(failureHandler)
+                // GenerateOneTimeTokenFilter runs ahead of AuthorizationFilter
+                // in the chain, so it never sees SecurityChains' access(...)
+                // rule for /ott/generate. This resolver is what actually
+                // keeps an anonymous caller from minting a code for an
+                // arbitrary username — see its own javadoc.
+                .generateRequestResolver(generateRequestResolver)
         );
     }
 }

@@ -51,6 +51,17 @@ public class FormLoginConfigurer
                 .formLogin(form -> form
                         .loginPage(SecurityConstants.LOGIN_PAGE)
                         .loginProcessingUrl(SecurityConstants.LOGIN_PROCESSING_URL)
+                        // alwaysUse=false (the one-arg overload): a saved
+                        // request — e.g. the SPA's /oauth2/authorize hit that
+                        // sent the browser here — still wins and gets
+                        // resumed. This is only the fallback for a login with
+                        // nothing saved (direct browser navigation to
+                        // /login, or a login right after logout cleared the
+                        // old saved request): without it,
+                        // SavedRequestAwareAuthenticationSuccessHandler falls
+                        // back to its own default of "/", which 404s since
+                        // this auth-server-only app has no root controller.
+                        .defaultSuccessUrl(SecurityConstants.LOGIN_SUCCESS_URL)
                         .permitAll())
                 .requestCache(cache -> cache.requestCache(requestCache))
                 .sessionManagement(session -> session

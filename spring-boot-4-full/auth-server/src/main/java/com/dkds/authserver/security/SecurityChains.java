@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
+import org.springframework.security.authorization.AuthorityAuthorizationManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -33,6 +34,7 @@ import org.springframework.security.web.util.matcher.NegatedRequestMatcher;
 @EnableMultiFactorAuthentication(authorities = {})
 public class SecurityChains {
 
+    private final FormLoginConfigurer formLoginConfigurer;
     private final OneTimeTokenConfigurer oneTimeTokenConfigurer;
 
     /// Chain 1: Authorization server + OIDC endpoints.
@@ -116,14 +118,28 @@ public class SecurityChains {
                 .authorizeHttpRequests(authz -> authz
                         .requestMatchers(SecurityConstants.LOGIN_PAGE).permitAll()
                         // A principal mid-MFA-gate holds FACTOR_PASSWORD but not
-                        // yet FACTOR_OTT, so the composed authorization manager
-                        // would otherwise deny these two OTT endpoints before the
-                        // user can ever submit their code.
-                        .requestMatchers(EmailOttDeliveryHandler.OTT_INPUT_URL).permitAll()
-                        .requestMatchers(EmailOttDeliveryHandler.OTT_REQUEST_URL).permitAll()
-                        .requestMatchers(GenerateOneTimeTokenFilter.DEFAULT_GENERATE_URL).permitAll()
+                        // yet FACTOR_OTT. Using the DSL's own hasAuthority(...)
+                        // here would go through the composed
+                        // AuthorizationManagerFactory (see
+                        // AuthorizeHttpRequestsConfigurer.AuthorizedUrl /
+                        // DefaultAuthorizationManagerFactory), which ANDs in the
+                        // same missing-FACTOR_OTT requirement via
+                        // setAdditionalAuthorization(...) — permitAll(),
+                        // denyAll() and anonymous() are the only factory methods
+                        // exempt from that composition. So these three OTT
+                        // endpoints are wired with access(...) instead, handing
+                        // it a plain AuthorityAuthorizationManager built by hand
+                        // rather than through the factory: it still requires a
+                        // real, password-authenticated principal (not
+                        // anonymous, not permitAll), but doesn't re-demand the
+                        // very factor these pages exist to obtain.
+                        .requestMatchers(
+                                EmailOttDeliveryHandler.OTT_INPUT_URL,
+                                EmailOttDeliveryHandler.OTT_REQUEST_URL,
+                                GenerateOneTimeTokenFilter.DEFAULT_GENERATE_URL)
+                        .access(AuthorityAuthorizationManager.hasAuthority(FactorGrantedAuthority.PASSWORD_AUTHORITY))
                         .anyRequest().authenticated())
-                .with(new FormLoginConfigurer(), Customizer.withDefaults())
+                .with(formLoginConfigurer, Customizer.withDefaults())
                 .with(oneTimeTokenConfigurer, Customizer.withDefaults());
 
         return http.build();

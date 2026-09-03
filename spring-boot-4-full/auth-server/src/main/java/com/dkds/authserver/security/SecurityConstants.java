@@ -21,6 +21,12 @@ public class SecurityConstants {
     public static final String LOGIN_PAGE = "/login";
     public static final String LOGIN_PROCESSING_URL = "/login";
 
+    /// Fallback landing page after a successful form login when there is no
+    /// saved request to resume (SavedRequestAwareAuthenticationSuccessHandler
+    /// otherwise falls back to its own default of "/", which this
+    /// authorization-server-only app never maps — see FormLoginConfigurer.
+    public static final String LOGIN_SUCCESS_URL = "/login-success";
+
     // Session
     public static final long SESSION_TIMEOUT_MINUTES = 30;
 }

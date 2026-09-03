@@ -28,4 +28,11 @@ public class LoginController {
     public String ottRequestPage() {
         return "ott-request";
     }
+
+    /// Fallback landing page after a successful login with no saved request
+    /// to resume (see FormLoginConfigurer). Template: templates/login-success.html
+    @GetMapping(SecurityConstants.LOGIN_SUCCESS_URL)
+    public String loginSuccessPage() {
+        return "login-success";
+    }
 }
