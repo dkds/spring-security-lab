@@ -64,6 +64,25 @@ public class SecurityChains {
                 .securityMatcher(endpointsMatcher)
                 .authorizeHttpRequests(authz -> authz.anyRequest().authenticated())
                 .csrf(csrf -> csrf.ignoringRequestMatchers(endpointsMatcher))
+                // Deliberately NOT wired with .rememberMe(...) here, even
+                // though a remembered visitor's first hit is exactly
+                // /oauth2/authorize (this chain): verified live that it
+                // wouldn't help. spring-security-oauth2-authorization-server
+                // registers its own internal
+                // OAuth2AuthorizationCodeRequestValidatingFilter well before
+                // RememberMeAuthenticationFilter's fixed position in the
+                // chain; it snapshots the (at that point still unauthenticated)
+                // principal into a request attribute that
+                // OAuth2AuthorizationEndpointFilter later reuses verbatim
+                // instead of re-reading SecurityContextHolder — so by the time
+                // remember-me actually authenticates, the OAuth2 request is
+                // already validated against an anonymous principal and fails
+                // with "OAuth 2.0 Parameter: principal". Reordering that
+                // internal filter would mean addressing a private nested
+                // class not part of any public API — exactly the kind of
+                // fragile, non-idiomatic hack this codebase means to avoid.
+                // See RememberMeTests for the actual verified behavior:
+                // remember-me still works correctly on Chain 3.
                 .exceptionHandling(ex -> ex
                         // Unauthenticated browser requests to /oauth2/authorize
                         // must be redirected to the login page (Chain 3), not

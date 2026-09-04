@@ -6,6 +6,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
+import org.springframework.security.web.authentication.RememberMeServices;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.savedrequest.RequestCache;
 import org.springframework.security.web.util.matcher.NegatedRequestMatcher;
@@ -31,6 +32,14 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
 ///   the concrete class.
 /// - Phase 9: CaptchaFilter runs before UsernamePasswordAuthenticationFilter,
 ///   here only — never on Chain 1/2 (see Phase9ChainInventoryTests).
+/// - Remember-me: rememberMeServices comes from LoginConfig (framework
+///   interface type only, so this class stays free of the concrete
+///   PersistentTokenBasedRememberMeServices/JpaPersistentTokenRepository
+///   choice). Deliberately scoped to THIS chain only — see SecurityChains'
+///   own comment on why applying it to Chain 1 (/oauth2/authorize) as well
+///   would be dead weight: verified live that the OAuth2 authorization
+///   server's own internal pre-validating filter runs before
+///   RememberMeAuthenticationFilter ever gets a chance there.
 @RequiredArgsConstructor
 public class FormLoginConfigurer
         extends AbstractHttpConfigurer<FormLoginConfigurer, HttpSecurity> {
@@ -51,6 +60,8 @@ public class FormLoginConfigurer
     private final RequestCache requestCache;
 
     private final SessionAuthenticationStrategy sessionAuthenticationStrategy;
+
+    private final RememberMeServices rememberMeServices;
 
     @Override
     public void init(HttpSecurity http) {
@@ -76,6 +87,7 @@ public class FormLoginConfigurer
                 .exceptionHandling(ex -> ex.defaultAuthenticationEntryPointFor(
                         new LoginUrlAuthenticationEntryPoint(SecurityConstants.LOGIN_PAGE),
                         new NegatedRequestMatcher(BEARER_TOKEN_MATCHER)))
+                .rememberMe(remember -> remember.rememberMeServices(rememberMeServices))
                 .addFilterBefore(new CaptchaFilter(captchaService), UsernamePasswordAuthenticationFilter.class);
     }
 }

@@ -27,6 +27,13 @@ spring:
 # OAuth2 authorization server settings.
 # issuer must resolve to a URL reachable by the SPA and resource server.
 app:
+  security:
+    # Signs the remember-me cookie / links a RememberMeAuthenticationProvider
+    # to the RememberMeServices that issued a given token — not a secret
+    # storing anything itself. A checked-in fixed value is a lab/POC-only
+    # shortcut (same rationale as the JWT signing key); a real deployment
+    # generates and rotates this per-environment.
+    remember-me-key: lab-remember-me-key
   oauth2:
     issuer: http://localhost:9000
     spa-redirect-uri: http://localhost:5173/callback
