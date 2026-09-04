@@ -1,5 +1,6 @@
 package com.dkds.authserver.login;
 
+import com.dkds.authserver.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -27,23 +28,41 @@ import java.time.Clock;
 /// and failure events: a failed attempt hasn't been granted any authorities
 /// yet to check instead, so the token TYPE — not authorities — is the one
 /// signal available uniformly on both event kinds.
+///
+/// Also clears AppUser.failedAttempts/lockedUntil on a successful password
+/// login — CaptchaService.recordCaptchaFailure(...) is the only writer of
+/// that lockout state (wrong captcha submissions), and a real successful
+/// login is the natural point to forgive it, same reasoning DESIGN.md
+/// already applies to OTT's own attempt cap.
 @Component
 @RequiredArgsConstructor
 public class LoginAttemptRecordingListener {
 
     private final LoginAttemptRepository loginAttemptRepository;
+    private final UserRepository userRepository;
     private final Clock clock;
 
     @EventListener
     @Transactional
     public void onSuccess(AuthenticationSuccessEvent event) {
         record(event.getAuthentication(), true);
+        clearLockoutState(event.getAuthentication());
     }
 
     @EventListener
     @Transactional
     public void onFailure(AbstractAuthenticationFailureEvent event) {
         record(event.getAuthentication(), false);
+    }
+
+    private void clearLockoutState(Authentication authentication) {
+        if (!(authentication instanceof UsernamePasswordAuthenticationToken)) {
+            return;
+        }
+        userRepository.findByUsername(authentication.getName()).ifPresent(user -> {
+            user.clearLock();
+            userRepository.save(user);
+        });
     }
 
     private void record(Authentication authentication, boolean success) {

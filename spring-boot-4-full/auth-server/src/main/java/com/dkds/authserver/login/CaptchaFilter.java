@@ -15,7 +15,8 @@ import java.io.IOException;
 
 /// Gates a password-login attempt behind a captcha challenge when
 /// CaptchaService says the recent failure history for this username+IP
-/// warrants one. Per DESIGN.md: positioned before
+/// warrants one, and escalates repeated wrong captcha submissions into a
+/// lockout. Per DESIGN.md: positioned before
 /// UsernamePasswordAuthenticationFilter, inside FormLoginConfigurer only —
 /// never wired onto Chain 1 or Chain 2 (see Phase9ChainInventoryTests).
 ///
@@ -28,7 +29,14 @@ import java.io.IOException;
 /// Rejecting here (missing/invalid captcha) never reaches
 /// UsernamePasswordAuthenticationFilter at all, so it's not recorded as a
 /// login_attempt (no username/password was actually checked) and doesn't
-/// itself feed back into CaptchaService's own failure count.
+/// itself feed back into CaptchaService's own credential-failure count.
+///
+/// A missing captcha token (the informational bounce a caller gets the
+/// FIRST time captcha becomes required, before the form has even rendered
+/// the field) is deliberately NOT counted as a wrong submission — only a
+/// token that was actually present and failed verify(...) counts toward the
+/// lockout. Otherwise the very redirect that asks for a captcha would count
+/// against the caller.
 @RequiredArgsConstructor
 public class CaptchaFilter extends OncePerRequestFilter {
 
@@ -46,10 +54,28 @@ public class CaptchaFilter extends OncePerRequestFilter {
         }
 
         String username = request.getParameter("username");
-        if (captchaService.isRequired(username, request.getRemoteAddr())
-                && !captchaService.verify(request.getParameter("captchaToken"))) {
-            response.sendRedirect(SecurityConstants.LOGIN_PAGE + "?captcha");
+
+        // A UX nicety, not the enforcement point — AppUserDetailsService
+        // rejects a locked account independently regardless of this check
+        // (correct password and valid captcha included). Checked here only
+        // so a locked caller gets a specific message instead of a generic
+        // one after filling in the form again.
+        if (captchaService.isLocked(username)) {
+            response.sendRedirect(SecurityConstants.LOGIN_PAGE + "?locked");
             return;
+        }
+
+        if (captchaService.isRequired(username, request.getRemoteAddr())) {
+            String token = request.getParameter("captchaToken");
+            if (token == null || token.isBlank()) {
+                response.sendRedirect(SecurityConstants.LOGIN_PAGE + "?captcha");
+                return;
+            }
+            if (!captchaService.verify(token)) {
+                captchaService.recordCaptchaFailure(username);
+                response.sendRedirect(SecurityConstants.LOGIN_PAGE + "?captcha&error");
+                return;
+            }
         }
 
         filterChain.doFilter(request, response);

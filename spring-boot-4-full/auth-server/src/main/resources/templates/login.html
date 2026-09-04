@@ -193,10 +193,26 @@
 
         <!-- Captcha challenge: shown after CaptchaFilter blocked a prior
              attempt (Phase 9), which only happens after several recent
-             failures for this username+IP. -->
-        <div th:if="${param.captcha}" class="error-message">
+             failures for this username+IP. ?error alongside ?captcha means
+             a token WAS submitted and was wrong (counts toward the lockout
+             below) — distinct from the plain first-time bounce, where
+             nothing has been attempted yet. -->
+        <div th:if="${param.captcha and !param.containsKey('error')}" class="error-message">
             <strong>Verification Required</strong>
             <p>Too many recent failed attempts. Complete the check below to try again.</p>
+        </div>
+        <div th:if="${param.captcha and param.containsKey('error')}" class="error-message">
+            <strong>Verification Failed</strong>
+            <p>That wasn't accepted. Repeated failures here will lock the account for a while — try again.</p>
+        </div>
+
+        <!-- Locked out: CaptchaService.recordCaptchaFailure(...) hit the
+             threshold (Phase 9 follow-up). AppUserDetailsService enforces
+             this independently; this message is purely so a locked caller
+             sees something specific rather than a generic failure. -->
+        <div th:if="${param.locked}" class="error-message">
+            <strong>Account Temporarily Locked</strong>
+            <p>Too many failed verification attempts. Try again in a while.</p>
         </div>
 
         <!-- Logout success message -->

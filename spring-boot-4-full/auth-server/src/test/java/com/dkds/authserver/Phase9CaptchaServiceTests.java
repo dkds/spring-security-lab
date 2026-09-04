@@ -3,6 +3,8 @@ package com.dkds.authserver;
 import com.dkds.authserver.login.CaptchaService;
 import com.dkds.authserver.login.LoginAttempt;
 import com.dkds.authserver.login.LoginAttemptRepository;
+import com.dkds.authserver.user.AppUser;
+import com.dkds.authserver.user.UserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +34,9 @@ class Phase9CaptchaServiceTests {
 
     @Autowired
     private Clock clock;
+
+    @Autowired
+    private UserRepository userRepository;
 
     @Test
     @DisplayName("Not required with no recent failures")
@@ -75,12 +80,62 @@ class Phase9CaptchaServiceTests {
     }
 
     @Test
-    @DisplayName("verify() rejects null/blank tokens and accepts a non-blank one")
-    void verifyRejectsBlankAcceptsNonBlank() {
+    @DisplayName("verify() rejects null/blank tokens and the reserved 'wrong' sentinel, accepts any other non-blank value")
+    void verifyRejectsBlankAndWrongAcceptsOtherNonBlank() {
         assertThat(captchaService.verify(null)).isFalse();
         assertThat(captchaService.verify("")).isFalse();
         assertThat(captchaService.verify("   ")).isFalse();
+        assertThat(captchaService.verify("wrong")).isFalse();
         assertThat(captchaService.verify("some-token")).isTrue();
+    }
+
+    @Test
+    @DisplayName("isLocked() is false for a user with no lockedUntil")
+    void isLockedFalseWhenNeverLocked() {
+        var username = "phase9-lock-unset@test";
+        userRepository.save(AppUser.builder()
+                .username(username).passwordHash("n/a").enabled(true).failedAttempts(0).build());
+
+        assertThat(captchaService.isLocked(username)).isFalse();
+    }
+
+    @Test
+    @DisplayName("isLocked() is false for an unknown username")
+    void isLockedFalseForUnknownUsername() {
+        assertThat(captchaService.isLocked("phase9-does-not-exist@test")).isFalse();
+    }
+
+    @Test
+    @DisplayName("recordCaptchaFailure() locks the account after CAPTCHA_FAILURE_THRESHOLD wrong submissions and resets the counter")
+    void recordCaptchaFailureLocksAtThreshold() {
+        var username = "phase9-captcha-lockout@test";
+        userRepository.save(AppUser.builder()
+                .username(username).passwordHash("n/a").enabled(true).failedAttempts(0).build());
+
+        captchaService.recordCaptchaFailure(username);
+        captchaService.recordCaptchaFailure(username);
+        assertThat(captchaService.isLocked(username))
+                .as("below the threshold, not yet locked")
+                .isFalse();
+
+        captchaService.recordCaptchaFailure(username);
+        assertThat(captchaService.isLocked(username))
+                .as("threshold reached, account is locked")
+                .isTrue();
+
+        var locked = userRepository.findByUsername(username).orElseThrow();
+        assertThat(locked.getFailedAttempts())
+                .as("the counter resets once it triggers a lock, rather than growing unbounded")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("recordCaptchaFailure() for an unknown username is a no-op, not an error")
+    void recordCaptchaFailureUnknownUsernameIsNoOp() {
+        captchaService.recordCaptchaFailure("phase9-captcha-unknown@test");
+        // No exception, and nothing to assert against — the point is that
+        // this must not throw for the same anti-enumeration reasons the rest
+        // of the login path already follows.
     }
 
     private void recordFailures(int count) {

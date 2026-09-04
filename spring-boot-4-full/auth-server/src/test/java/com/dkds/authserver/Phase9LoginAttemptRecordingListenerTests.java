@@ -1,6 +1,8 @@
 package com.dkds.authserver;
 
 import com.dkds.authserver.login.LoginAttemptRepository;
+import com.dkds.authserver.user.AppUser;
+import com.dkds.authserver.user.UserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +38,29 @@ class Phase9LoginAttemptRecordingListenerTests {
 
     @Autowired
     private LoginAttemptRepository loginAttemptRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Test
+    @DisplayName("A successful password login clears a prior lockout's failedAttempts/lockedUntil")
+    void successfulLoginClearsLockoutState() {
+        String username = "phase9-listener-clears-lock@test";
+        userRepository.save(AppUser.builder()
+                .username(username).passwordHash("n/a").enabled(true)
+                .failedAttempts(2).lockedUntil(Instant.now().plusSeconds(900)).build());
+
+        var request = new MockHttpServletRequest();
+        request.setRemoteAddr("203.0.113.52");
+        var authentication = new UsernamePasswordAuthenticationToken(username, "n/a", List.of());
+        authentication.setDetails(new WebAuthenticationDetails(request));
+
+        eventPublisher.publishEvent(new AuthenticationSuccessEvent(authentication));
+
+        var user = userRepository.findByUsername(username).orElseThrow();
+        assertThat(user.getFailedAttempts()).isZero();
+        assertThat(user.getLockedUntil()).isNull();
+    }
 
     @Test
     @DisplayName("A successful password login is recorded with success=true and the caller's IP")
