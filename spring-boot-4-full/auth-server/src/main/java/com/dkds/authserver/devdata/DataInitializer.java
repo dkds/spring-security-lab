@@ -1,4 +1,4 @@
-package com.dkds.authserver.common;
+package com.dkds.authserver.devdata;
 
 import com.dkds.authserver.authorization.UserVerification;
 import com.dkds.authserver.authorization.UserVerificationRepository;
@@ -31,6 +31,12 @@ import java.time.Instant;
 ///
 /// seedPhase7SsoData() creates a SAML2 test user + membership in ORG_SSO +
 /// the identity_provider row for the Keycloak "lab" realm.
+///
+/// Lives in its own package rather than `common` (moved there in Phase 11):
+/// it was never actually part of DESIGN.md's `common` listing (event/,
+/// exception/, ForwardedHeaderConfig), and by nature it needs to touch
+/// nearly every domain to seed sample data for it — the opposite of rule 4's
+/// "common depends on nothing inside the application".
 @Component
 @RequiredArgsConstructor
 @Slf4j

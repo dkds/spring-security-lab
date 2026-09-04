@@ -1,4 +1,4 @@
-package com.dkds.authserver.common.event;
+package com.dkds.authserver.security;
 
 import com.dkds.authserver.authorization.UserVerification;
 import com.dkds.authserver.authorization.UserVerificationRepository;
@@ -32,6 +32,14 @@ import java.time.Instant;
 /// Also invalidates any outstanding (unconsumed) OTT code for the user on
 /// every successful login, so a previously issued but never-entered code
 /// can't be replayed later.
+///
+/// Lives in `security` (moved from `common.event` in Phase 11), not because
+/// it composes filter chains, but because ArchUnit rule 3 is the only rule
+/// that lets a class reach into every mechanism package it needs to
+/// (user, authorization, onetimetoken, sso) without violating rule 4 —
+/// `common` must depend on nothing, and centralizing this write is the
+/// entire point of the class (see above), so it can't be narrowed to fit
+/// there instead.
 @Component
 @RequiredArgsConstructor
 @Slf4j

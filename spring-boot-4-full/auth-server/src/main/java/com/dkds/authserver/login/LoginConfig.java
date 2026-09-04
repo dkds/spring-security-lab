@@ -2,6 +2,8 @@ package com.dkds.authserver.login;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
+import org.springframework.security.web.savedrequest.RequestCache;
 
 /// Infrastructure beans for the form-login feature.
 ///
@@ -18,7 +20,9 @@ import org.springframework.context.annotation.Configuration;
 public class LoginConfig {
 
     @Bean
-    public FormLoginConfigurer formLoginConfigurer(CaptchaService captchaService) {
-        return new FormLoginConfigurer(captchaService);
+    public FormLoginConfigurer formLoginConfigurer(
+            CaptchaService captchaService, RequestCache requestCache,
+            SessionAuthenticationStrategy sessionAuthenticationStrategy) {
+        return new FormLoginConfigurer(captchaService, requestCache, sessionAuthenticationStrategy);
     }
 }

@@ -1,14 +1,13 @@
 package com.dkds.authserver.login;
 
-import com.dkds.authserver.security.IdentityChangeAwareSessionStrategy;
 import com.dkds.authserver.security.SecurityConstants;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
-import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
-import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
+import org.springframework.security.web.savedrequest.RequestCache;
 import org.springframework.security.web.util.matcher.NegatedRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestHeaderRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
@@ -25,7 +24,11 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
 ///   MediaTypeRequestMatcher(TEXT_HTML).
 /// - HttpSessionRequestCache with matcher /oauth2/authorize.
 /// - Session handling uses IdentityChangeAwareSessionStrategy (delegating to
-///   ChangeSessionIdAuthenticationStrategy). Do NOT use newSession().
+///   ChangeSessionIdAuthenticationStrategy). Do NOT use newSession(). Built by
+///   SecurityChains (ArchUnit rule 3: `security` may depend on anything,
+///   nothing depends on it) and injected here only by its plain
+///   SessionAuthenticationStrategy interface type — this class never names
+///   the concrete class.
 /// - Phase 9: CaptchaFilter runs before UsernamePasswordAuthenticationFilter,
 ///   here only — never on Chain 1/2 (see Phase9ChainInventoryTests).
 @RequiredArgsConstructor
@@ -40,20 +43,17 @@ public class FormLoginConfigurer
 
     private final CaptchaService captchaService;
 
+    /// Scoped to the authorization endpoint. When an unauthenticated user
+    /// hits /oauth2/authorize, the request is saved and replayed after a
+    /// successful login. sessionAuthenticationStrategy shares this exact
+    /// instance so it clears the same saved request when the principal
+    /// changes.
+    private final RequestCache requestCache;
+
+    private final SessionAuthenticationStrategy sessionAuthenticationStrategy;
+
     @Override
     public void init(HttpSecurity http) {
-        // Request cache scoped to the authorization endpoint. When an
-        // unauthenticated user hits /oauth2/authorize, the request is saved and
-        // replayed after a successful login. The identity-change session
-        // strategy shares this exact instance so it clears the same saved
-        // request when the principal changes.
-        var requestCache = new HttpSessionRequestCache();
-        requestCache.setRequestMatcher(
-                PathPatternRequestMatcher.withDefaults()
-                        .matcher(SecurityConstants.OAUTH2_AUTHORIZE_MATCHER));
-
-        var sessionStrategy = new IdentityChangeAwareSessionStrategy(requestCache);
-
         http
                 .formLogin(form -> form
                         .loginPage(SecurityConstants.LOGIN_PAGE)
@@ -72,7 +72,7 @@ public class FormLoginConfigurer
                         .permitAll())
                 .requestCache(cache -> cache.requestCache(requestCache))
                 .sessionManagement(session -> session
-                        .sessionAuthenticationStrategy(sessionStrategy))
+                        .sessionAuthenticationStrategy(sessionAuthenticationStrategy))
                 .exceptionHandling(ex -> ex.defaultAuthenticationEntryPointFor(
                         new LoginUrlAuthenticationEntryPoint(SecurityConstants.LOGIN_PAGE),
                         new NegatedRequestMatcher(BEARER_TOKEN_MATCHER)))
