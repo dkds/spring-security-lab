@@ -3,6 +3,7 @@ package com.dkds.authserver.common.event;
 import com.dkds.authserver.authorization.UserVerification;
 import com.dkds.authserver.authorization.UserVerificationRepository;
 import com.dkds.authserver.onetimetoken.OneTimeTokenRepository;
+import com.dkds.authserver.sso.SamlUserAuthoritiesConverter;
 import com.dkds.authserver.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,10 +18,16 @@ import java.time.Instant;
 
 /// Records login activity at a single point, per DESIGN.md: writes
 /// `last_login_at` on every successful authentication, and
-/// `user_verification.verified_at` only when that same authentication
-/// carries FACTOR_OTT — never in a per-mechanism success handler, since a
-/// write attached to form login would silently stop happening on the SSO
-/// path.
+/// `user_verification.verified_at` when that same authentication carries
+/// FACTOR_OTT or (Phase 10) FACTOR_IDP_MFA — never in a per-mechanism
+/// success handler, since a write attached to form login would silently
+/// stop happening on the SSO path.
+///
+/// FACTOR_IDP_MFA counting here, not just FACTOR_OTT, is what actually makes
+/// an MFA-asserting IdP skip a subsequent OTT prompt: OrgPolicyRequiredAuthoritiesRepository's
+/// interval check is driven purely by this timestamp's freshness, not by
+/// which specific factor produced it — so treating the two as equivalent
+/// here is the one place that decision needs to be made.
 ///
 /// Also invalidates any outstanding (unconsumed) OTT code for the user on
 /// every successful login, so a previously issued but never-entered code
@@ -50,10 +57,11 @@ public class LoginRecordingListener {
         user.setLastLoginAt(now);
         userRepository.save(user);
 
-        boolean ottCompleted = authentication.getAuthorities().stream()
+        boolean mfaEquivalentCompleted = authentication.getAuthorities().stream()
                 .anyMatch(authority -> authority instanceof FactorGrantedAuthority factor
-                        && FactorGrantedAuthority.OTT_AUTHORITY.equals(factor.getAuthority()));
-        if (ottCompleted) {
+                        && (FactorGrantedAuthority.OTT_AUTHORITY.equals(factor.getAuthority())
+                                || SamlUserAuthoritiesConverter.IDP_MFA_AUTHORITY.equals(factor.getAuthority())));
+        if (mfaEquivalentCompleted) {
             recordOttVerification(user.getId(), now);
         }
 

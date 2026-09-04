@@ -22,18 +22,29 @@ import org.springframework.security.web.access.intercept.RequestAuthorizationCon
 /// `AuthorizationManagers.allOf(orgPolicy, ipPolicy)` — both must grant (or
 /// abstain) for a request to pass.
 ///
-/// Per DESIGN.md Phase 7: a SAML-authenticated principal satisfies the factor
-/// gate on its own, as an alternative to password+OTT — DESIGN.md phrases
-/// this as `AllRequiredFactorsAuthorizationManager.anyOf(samlOnly,
-/// passwordAndOtt)`. Implemented instead via SamlOrPasswordOttAuthorizationManager,
-/// which grants immediately for FACTOR_SAML_RESPONSE and otherwise delegates
-/// to the SAME dynamic `ottPolicy` unchanged — see its own javadoc for why:
-/// wrapping `ottPolicy` in either `anyOf` helper degrades its denial into a
-/// generic composite decision, silently breaking the Phase 4 missing-FACTOR_OTT
-/// redirect. IP restriction stays ANDed on the *outside* of that choice
-/// (`allOf(factorPolicy, ipPolicy)`), not inside either branch — DESIGN.md:
-/// "IP is not a factor", so it applies the same regardless of which factor
-/// path satisfied the gate.
+/// Per DESIGN.md Phase 7/10: a SAML-authenticated principal goes through this
+/// SAME dynamic ottPolicy check too — not a separate unconditional bypass.
+/// Phase 7 originally special-cased FACTOR_SAML_RESPONSE to grant
+/// immediately (matching DESIGN.md's literal
+/// `AllRequiredFactorsAuthorizationManager.anyOf(samlOnly, passwordAndOtt)`
+/// phrasing) via a dedicated SamlOrPasswordOttAuthorizationManager wrapper.
+/// Phase 10 removed that wrapper deliberately: under the literal reading,
+/// any SAML login bypassed an org's own MFA-interval policy unconditionally,
+/// which made Phase 10's own stated test ("an org whose IdP asserts MFA
+/// satisfies the requirement without an OTT prompt") trivially true whether
+/// or not the IdP actually asserted MFA — not a real behavioral proof of
+/// anything. With the wrapper gone, ottPolicy's existing verified_at-freshness
+/// check (see OrgPolicyRequiredAuthoritiesRepository) applies uniformly to
+/// every mechanism; SamlUserAuthoritiesConverter granting
+/// FactorGrantedAuthority.fromFactor("IDP_MFA") when the assertion asserts
+/// MFA, and LoginRecordingListener writing user_verification.verified_at for
+/// either FACTOR_OTT or FACTOR_IDP_MFA, is what actually makes an
+/// MFA-asserting IdP skip the OTT prompt — genuinely conditional on what the
+/// IdP asserted, not a blanket exemption for the mechanism.
+///
+/// IP restriction stays ANDed on the outside (`allOf(ottPolicy, ipPolicy)`),
+/// applying the same regardless of which factor satisfied the gate —
+/// DESIGN.md: "IP is not a factor".
 @Configuration
 public class AuthorizationPolicyConfig {
 
@@ -43,8 +54,7 @@ public class AuthorizationPolicyConfig {
             OrgIpAuthorizationManager ipAuthorizationManager) {
         var factory = new DefaultAuthorizationManagerFactory<RequestAuthorizationContext>();
         AuthorizationManager<RequestAuthorizationContext> ottPolicy = new RequiredAuthoritiesAuthorizationManager<>(orgPolicyRepository);
-        AuthorizationManager<RequestAuthorizationContext> factorPolicy = new SamlOrPasswordOttAuthorizationManager(ottPolicy);
-        factory.setAdditionalAuthorization(AuthorizationManagers.allOf(factorPolicy, ipAuthorizationManager));
+        factory.setAdditionalAuthorization(AuthorizationManagers.allOf(ottPolicy, ipAuthorizationManager));
         return factory;
     }
 }

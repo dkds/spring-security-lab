@@ -20,29 +20,43 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 /// Phase 7, PLAN.md test 1: "SAML login alone satisfies the gate; password
-/// alone does not."
+/// alone does not." — originally proved via a dedicated
+/// SamlOrPasswordOttAuthorizationManager that granted immediately for any
+/// FACTOR_SAML_RESPONSE, unconditionally.
+///
+/// Phase 10 removed that wrapper deliberately (see AuthorizationPolicyConfig's
+/// own javadoc): under the original unconditional-bypass reading, ANY SAML
+/// login skipped an org's own MFA-interval policy regardless of what the IdP
+/// actually asserted, which made Phase 10's own stated test trivially true
+/// either way. SAML sessions now go through the exact same dynamic
+/// verified_at-freshness check password sessions do
+/// (OrgPolicyRequiredAuthoritiesRepository) — this test still passes, but
+/// for a narrower, honest reason: ssouser@dkds.com's only org (ORG_SSO) has
+/// mfa_mode=NEVER, so the interval check returns "nothing additional
+/// required" for ANY mechanism, not specifically because it's SAML. The
+/// mechanism-specific claim this test's name still makes — that
+/// FACTOR_IDP_MFA is what actually lets a SAML session skip an
+/// interval-requiring org's OTT prompt — is what
+/// Phase10IdpMfaSatisfiesOrgPolicyTests proves instead, using an org whose
+/// policy genuinely requires a fresh factor.
 ///
 /// Exercises the REAL, fully wired AuthorizationManagerFactory bean
 /// (SecurityChains Chain 1, /oauth2/authorize) — not a fresh hand-built
 /// instance — same philosophy as Phase6ProfileEndpointTests. Uses a plain
 /// TestingAuthenticationToken carrying FactorGrantedAuthority.SAML_RESPONSE_AUTHORITY
-/// rather than a real Saml2Authentication: SamlOrPasswordOttAuthorizationManager
-/// only inspects Authentication#getAuthorities(), never the concrete
-/// principal type, so this exercises exactly the code path that matters
-/// without needing a live-signed assertion (that round trip was verified
-/// manually against a real Keycloak instance instead — see AGENTS.md Known
+/// rather than a real Saml2Authentication, since the policy check only ever
+/// inspects Authentication#getAuthorities() and a username, never the
+/// concrete principal type — a live-signed-assertion round trip was verified
+/// manually against a real Keycloak instance instead (see AGENTS.md Known
 /// Gaps for the same precedent on OTT's Mailpit-backed flow).
 ///
 /// "password alone does not [satisfy the gate]" for an OTT-requiring org is
-/// already covered by Phase4Chain1MissingFactorTests, which stays green
-/// unchanged — SamlOrPasswordOttAuthorizationManager returns that policy's
-/// own denial verbatim when no SAML factor is present, deliberately (see its
-/// own javadoc). This test only adds the SAML-side half of the composition.
+/// covered by Phase4Chain1MissingFactorTests, which stays green unchanged.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
-@DisplayName("Phase 7: SAML factor alone satisfies the /oauth2/authorize gate")
+@DisplayName("Phase 7: SAML factor satisfies the /oauth2/authorize gate for a NEVER-mode org")
 class Phase7SamlFactorSatisfiesGateTests {
 
     private static final String AUTHORIZE_REQUEST =

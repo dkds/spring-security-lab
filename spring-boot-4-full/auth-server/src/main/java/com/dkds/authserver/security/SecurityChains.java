@@ -140,9 +140,10 @@ public class SecurityChains {
                         // even though this setup doesn't rely on Keycloak fetching
                         // it (the realm's client was configured with static values).
                         .requestMatchers("/saml2/**", "/login/saml2/**").permitAll()
-                        // A principal mid-MFA-gate holds FACTOR_PASSWORD but not
-                        // yet FACTOR_OTT. Using the DSL's own hasAuthority(...)
-                        // here would go through the composed
+                        // A principal mid-MFA-gate holds FACTOR_PASSWORD (or,
+                        // since Phase 10, FACTOR_SAML_RESPONSE) but not yet
+                        // FACTOR_OTT/FACTOR_IDP_MFA. Using the DSL's own
+                        // hasAuthority(...) here would go through the composed
                         // AuthorizationManagerFactory (see
                         // AuthorizeHttpRequestsConfigurer.AuthorizedUrl /
                         // DefaultAuthorizationManagerFactory), which ANDs in the
@@ -153,14 +154,22 @@ public class SecurityChains {
                         // endpoints are wired with access(...) instead, handing
                         // it a plain AuthorityAuthorizationManager built by hand
                         // rather than through the factory: it still requires a
-                        // real, password-authenticated principal (not
-                        // anonymous, not permitAll), but doesn't re-demand the
-                        // very factor these pages exist to obtain.
+                        // real, already-authenticated principal (not anonymous,
+                        // not permitAll), but doesn't re-demand the very factor
+                        // these pages exist to obtain. Widened to accept
+                        // FACTOR_SAML_RESPONSE too (Phase 10): since the org's
+                        // own MFA-interval policy now applies uniformly to SAML
+                        // sessions as well (see AuthorizationPolicyConfig), a
+                        // SAML session without FACTOR_IDP_MFA can be routed here
+                        // the same way a password session is — it must actually
+                        // be able to reach these pages, not just get redirected
+                        // to a dead end.
                         .requestMatchers(
                                 EmailOttDeliveryHandler.OTT_INPUT_URL,
                                 EmailOttDeliveryHandler.OTT_REQUEST_URL,
                                 GenerateOneTimeTokenFilter.DEFAULT_GENERATE_URL)
-                        .access(AuthorityAuthorizationManager.hasAuthority(FactorGrantedAuthority.PASSWORD_AUTHORITY))
+                        .access(AuthorityAuthorizationManager.hasAnyAuthority(
+                                FactorGrantedAuthority.PASSWORD_AUTHORITY, FactorGrantedAuthority.SAML_RESPONSE_AUTHORITY))
                         .anyRequest().authenticated())
                 .with(formLoginConfigurer, Customizer.withDefaults())
                 .with(oneTimeTokenConfigurer, Customizer.withDefaults())
