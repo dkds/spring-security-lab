@@ -30,6 +30,18 @@ app:
   oauth2:
     issuer: http://localhost:9000
     spa-redirect-uri: http://localhost:5173/callback
+    # Phase 8: where an IdP-initiated SAML login (no saved request) lands.
+    # The SPA's own root is enough — RequireAuth.tsx fires signinRedirect()
+    # the moment an unauthenticated visitor hits a protected route, which
+    # starts a fresh authorization code request with PKCE on its own.
+    spa-landing-uri: http://localhost:5173/
+  saml:
+    # Standalone compose (auth-server/compose.yaml) runs Keycloak on
+    # localhost:8180. The devcontainer stack runs its own separate instance
+    # at http://keycloak:8180 instead (see application-devpod.yaml) — same
+    # realm file either way (auth-server/docker/keycloak/lab-realm.json),
+    # only the address differs.
+    keycloak-base-url: http://localhost:8180
 
 logging:
   level:

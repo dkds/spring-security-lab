@@ -132,6 +132,50 @@
             font-family: monospace;
             color: #667eea;
         }
+
+        .sso-divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+            margin: 24px 0 16px;
+        }
+
+        .sso-divider::before,
+        .sso-divider::after {
+            content: "";
+            flex: 1;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .sso-divider:not(:empty)::before {
+            margin-right: 12px;
+        }
+
+        .sso-divider:not(:empty)::after {
+            margin-left: 12px;
+        }
+
+        .sso-button {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            background: white;
+            color: #333;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            text-align: center;
+            text-decoration: none;
+            transition: border-color 0.2s, background 0.2s;
+        }
+
+        .sso-button:hover {
+            border-color: #667eea;
+            background: #f5f5ff;
+        }
     </style>
 </head>
 <body>
@@ -198,8 +242,12 @@
             <button type="submit" class="login-button">Sign In</button>
         </form>
 
+        <div class="sso-divider">or</div>
+        <a href="/sso/discover" class="sso-button">Sign in with SSO</a>
+
         <div class="login-footer">
             <p>Phase 2: Form Login + OAuth2 Authorization Code Flow</p>
+            <p>Phase 7: SP-initiated SAML2 (test user: <code>ssouser@dkds.com</code> via Keycloak's <code>lab</code> realm)</p>
         </div>
     </div>
 </body>

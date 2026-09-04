@@ -87,7 +87,6 @@
 
     <!-- OTT submission form -->
     <form th:action="@{/login/ott}" method="post" id="ottForm">
-        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
         <input type="hidden" name="token" id="tokenHidden"/>
 
         <div class="code-inputs">

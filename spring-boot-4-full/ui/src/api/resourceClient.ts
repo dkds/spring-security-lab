@@ -35,6 +35,17 @@ export async function fetchProfile(token: string): Promise<Record<string, unknow
   return apiFetch<Record<string, unknown>>('/api/profile', { token })
 }
 
+export interface Task {
+  id: number
+  title: string
+  done: boolean
+}
+
+/** Fetch the dummy task list from the resource server. */
+export async function fetchTasks(token: string): Promise<Task[]> {
+  return apiFetch<Task[]>('/api/tasks', { token })
+}
+
 /** Generic GET helper — extend with more endpoints as the resource-server grows. */
 export async function fetchResource<T>(path: string, token: string): Promise<T> {
   return apiFetch<T>(path, { token })

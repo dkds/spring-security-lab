@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Choose an organization</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            text-align: center;
+        }
+        .icon { font-size: 3rem; margin-bottom: 1rem; }
+        h1 { font-size: 1.5rem; color: #1a1a2e; margin-bottom: 0.5rem; }
+        .subtitle { color: #666; font-size: 0.9rem; margin-bottom: 2rem; line-height: 1.5; }
+        .org-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 1.5rem; }
+        .org-option {
+            display: block;
+            width: 100%;
+            padding: 0.85rem;
+            background: white;
+            color: #333;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            text-align: center;
+            text-decoration: none;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .org-option:hover { border-color: #667eea; background: #f5f5ff; }
+        .back-link { display: block; margin-top: 1rem; color: #667eea; font-size: 0.85rem; text-decoration: none; }
+        .back-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <div th:if="${!options.isEmpty()}">
+        <div class="icon">🏢</div>
+        <h1>Choose an organization</h1>
+        <p class="subtitle">Sign in through one of the organizations below.</p>
+        <div class="org-list">
+            <a th:each="option : ${options}"
+               th:href="@{/saml2/authenticate/{registrationId}(registrationId=${option.registrationId()})}"
+               th:text="${option.orgName()}"
+               class="org-option">Organization name</a>
+        </div>
+    </div>
+
+    <div th:if="${options.isEmpty()}">
+        <div class="icon">🔍</div>
+        <h1>No SSO sign-in available</h1>
+        <p class="subtitle">
+            We couldn't find an SSO-enabled organization for that account.
+            Try password sign-in instead, or check with your organization
+            administrator.
+        </p>
+    </div>
+
+    <a href="/sso/discover" class="back-link">&larr; Try a different username</a>
+    <a href="/login" class="back-link">&larr; Back to password sign-in</a>
+</div>
+</body>
+</html>

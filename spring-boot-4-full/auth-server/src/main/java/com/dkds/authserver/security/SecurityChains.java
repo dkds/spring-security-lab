@@ -3,6 +3,8 @@ package com.dkds.authserver.security;
 import com.dkds.authserver.login.FormLoginConfigurer;
 import com.dkds.authserver.onetimetoken.EmailOttDeliveryHandler;
 import com.dkds.authserver.onetimetoken.OneTimeTokenConfigurer;
+import com.dkds.authserver.sso.Saml2Configurer;
+import com.dkds.authserver.sso.SsoDiscoveryController;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
@@ -37,6 +39,7 @@ public class SecurityChains {
 
     private final FormLoginConfigurer formLoginConfigurer;
     private final OneTimeTokenConfigurer oneTimeTokenConfigurer;
+    private final Saml2Configurer saml2Configurer;
 
     /// Chain 1: Authorization server + OIDC endpoints.
     ///
@@ -119,6 +122,24 @@ public class SecurityChains {
         http
                 .authorizeHttpRequests(authz -> authz
                         .requestMatchers(SecurityConstants.LOGIN_PAGE).permitAll()
+                        // The org-discovery/picker flow (enter username, list
+                        // the SSO-eligible orgs, pick one) — necessarily
+                        // reachable pre-authentication, since it's how a user
+                        // gets to an IdP in the first place. See
+                        // SsoDiscoveryController's own javadoc on why it must
+                        // never let this endpoint distinguish an unknown
+                        // username from a known one with no SSO org.
+                        .requestMatchers(SsoDiscoveryController.SSO_DISCOVER_URL).permitAll()
+                        // /saml2/authenticate/{registrationId} initiates the
+                        // AuthnRequest redirect; /login/saml2/sso/{registrationId}
+                        // is the ACS endpoint the IdP posts the assertion back
+                        // to. Both must be reachable by an anonymous principal —
+                        // that's how SAML authentication happens in the first
+                        // place. /saml2/service-provider-metadata/{registrationId}
+                        // is included too: SP metadata is conventionally public,
+                        // even though this setup doesn't rely on Keycloak fetching
+                        // it (the realm's client was configured with static values).
+                        .requestMatchers("/saml2/**", "/login/saml2/**").permitAll()
                         // A principal mid-MFA-gate holds FACTOR_PASSWORD but not
                         // yet FACTOR_OTT. Using the DSL's own hasAuthority(...)
                         // here would go through the composed
@@ -142,7 +163,14 @@ public class SecurityChains {
                         .access(AuthorityAuthorizationManager.hasAuthority(FactorGrantedAuthority.PASSWORD_AUTHORITY))
                         .anyRequest().authenticated())
                 .with(formLoginConfigurer, Customizer.withDefaults())
-                .with(oneTimeTokenConfigurer, Customizer.withDefaults());
+                .with(oneTimeTokenConfigurer, Customizer.withDefaults())
+                // Applied last, deliberately — see Saml2Configurer's own
+                // javadoc: DelegatingAuthenticationEntryPoint picks the FIRST
+                // registered match, so form login's broad
+                // NegatedRequestMatcher(BEARER_TOKEN_MATCHER) entry point
+                // (registered above) keeps winning for ordinary unauthenticated
+                // requests regardless of what SAML registers.
+                .with(saml2Configurer, Customizer.withDefaults());
 
         return http.build();
     }

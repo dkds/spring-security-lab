@@ -29,3 +29,7 @@ spring:
           auth: false
           starttls:
             enable: false
+
+app:
+  saml:
+    keycloak-base-url: http://keycloak.test.invalid

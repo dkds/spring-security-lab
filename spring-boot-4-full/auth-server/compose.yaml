@@ -49,6 +49,35 @@ services:
     networks:
       - lab-net
 
+  # Phase 7 test SAML2 IdP. Realm/client/user are all defined in
+  # ./docker/keycloak/lab-realm.json and imported automatically on first
+  # boot (--import-realm), so the whole IdP side is reproducible from a
+  # clean checkout — no manual admin-console setup, and safe to commit to
+  # git (see that file's own notes on the fixed, lab-only RSA signing key).
+  #
+  # auth-server always runs as a plain process on localhost:9000 (in a
+  # devcontainer or on the host — see devbox's README on port forwarding),
+  # so the realm's SP redirect/ACS URL is hardcoded to http://localhost:9000
+  # and works unchanged in both setups; only Keycloak's own address differs
+  # (this compose file: localhost:8180 — the devbox devcontainer instead
+  # runs its own separate Keycloak reachable at http://keycloak:8180, same
+  # realm file). Do not run both stacks against the same host ports at once.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4
+    container_name: lab-auth-keycloak
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+    ports:
+      - "${KEYCLOAK_HOST_PORT:-8180}:8080"   # http://localhost:8180 — admin console at /admin
+    volumes:
+      - ./docker/keycloak:/opt/keycloak/data/import:ro
+      - ./.data/keycloak:/opt/keycloak/data/h2
+    networks:
+      - lab-net
+
 networks:
   lab-net:
     name: lab-net

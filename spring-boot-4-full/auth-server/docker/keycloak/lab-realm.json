@@ -1,0 +1,86 @@
+{
+  "realm": "lab",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": false,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+
+  "users": [
+    {
+      "username": "ssouser@dkds.com",
+      "email": "ssouser@dkds.com",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "SSO",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "ssopassword",
+          "temporary": false
+        }
+      ]
+    }
+  ],
+
+  "clients": [
+    {
+      "clientId": "http://localhost:9000/saml2/service-provider-metadata/keycloak",
+      "name": "auth-server (SAML SP)",
+      "description": "auth-server SAML SP (lab, Phase 7). registrationId=keycloak matches Spring Security's default SP URL pattern, so no entityId override is needed.",
+      "protocol": "saml",
+      "enabled": true,
+      "publicClient": false,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": true,
+      "redirectUris": [
+        "http://localhost:9000/login/saml2/sso/keycloak"
+      ],
+      "attributes": {
+        "saml.assertion.signature": "true",
+        "saml.server.signature": "true",
+        "saml.server.signature.keyinfo.ext": "false",
+        "saml.client.signature": "false",
+        "saml.encrypt": "false",
+        "saml.authnstatement": "true",
+        "saml.signature.algorithm": "RSA_SHA256",
+        "saml_name_id_format": "username",
+        "saml_force_name_id_format": "true",
+        "saml.force.post.binding": "true",
+        "saml_assertion_consumer_url_post": "http://localhost:9000/login/saml2/sso/keycloak",
+        "saml_idp_initiated_sso_url_name": "keycloak"
+      }
+    }
+  ],
+
+  "components": {
+    "org.keycloak.keys.KeyProvider": [
+      {
+        "name": "lab-fixed-rsa",
+        "providerId": "rsa",
+        "subComponents": {},
+        "config": {
+          "priority": ["100"],
+          "enabled": ["true"],
+          "active": ["true"],
+          "algorithm": ["RS256"],
+          "privateKey": ["-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQC8O05JbczCLsGS\nk6smNm9yPz1OKcBLt3CmIePnaLfDAGvqsMeqfXVjCSInPOnT2+rhLZLX8wy1BzPg\nBayEUTXm1lt6X95BdtVLQSlnCaTyNuF4LRFPtnLtFmIgJPOoflcCFUr9s1Zy6JHu\nGA2PEjfBJdN8hS+on4v6a1leiZgVs+WdIVcmEBmH9DjKqpPIaycmyUqCRgdt6P9E\nVVpv2145907pZHalidrIif6ypJZW0NFO0rb9cXwqArs4Kkul77E3+rQUx3FHVftz\n0bCoqCynX5rUfWemnLHL8f1h56rWzVVrG7Q0ZhFFzC/sJuvJ14/PYT3sx7kWeNLv\nBTbpiimDAgMBAAECggEAC+5OZgUZp21DQ8EsZf2pTrqHbj7jO2ljMISRZ4eRrkCG\nlpeh8EKHgEGB8q6/u3gDCUbUOe/j7E2KkjaJ2tEy83C+16Df+5JGrsBwmWFZHSkx\nXWat5DmSS0jR62usLg/j//PNjwsg/aOULF1F7r2e3xVAtHHUtYF3Y+YOAhoCk815\nc/eSJIF6+YE1vvmvVvM2n3C6QXQaTt1uY8Jsvmq02PmzdjWmG0rEdCemac5ARwyb\n7Z6cMOVDhxVwMETzA5BELOtCGRY3ZiNVjWF+cTxi24yju9Srt5EITntsrSpOehVd\n2tKQzH8C06xIQiT7xH7TtqQtytL+04gx/y0TH+6zsQKBgQDlCMQyYKjUk+0uXGFo\nVdUfDmdOTurS6pGbbj8wBgXqOxVB4d4etcPewA90vXOIu0jPkVFUUazsmzu+pM9N\nRMGuxUlGTaxzpAm4aPXsHZYWGRz6H5IsIKL7L0uf4WUP3QTe6rlng3No2z0MgGbp\ntCQcWEnqs55ValKKH2Xd3RIb9wKBgQDSZLl0Y4/5tQhxVklGCA9XLzmTi9S/uzEa\njLMpQJPNvqItkvsL1Jp9w3MbzTdVghYPKTJkDqbUjxZoUXeiB729mU6EEMrYZKOr\nJgiFJTYSnZMoQgVEYg/oMLIAxzKil+2wivU+FOtN57exgdv+DKqv5IxEXvPLiy12\nVKvmusMD1QKBgCUsaBO5Jo3iOJPWwKSbkczJnLDUFD8JfXqZyT21LI6Y6llYHKIl\nZFYqHBgZi7/8jdPKxUWHQCbjBy5pN5BWAY2pTbxQbRYT4NQCjS+2mZ6akt5x81qg\nLXPReFfJ0IpjmB/KPy9y4W96bg0yZgG2kEnddpnWb3Nzn1P1xqXc9Mx/AoGAaBPz\nuiPWgUyQ1KA+tyodjJ+L9/VgVUigzeV0a5/KfikjyS/AiOWvVy9srgAis2Yay30x\ntFWbKeNuzkQezkTOFBDWynYUImAGpw+1f0gdK7BPr8aZHG72N4J/S+s+nThTGNZk\n40Ut8egC8wiub0qM1V5WFSxzpek/oB3au9T/y9ECgYA8YSQfujBU0QplULJPfe0N\nmek4nZj6oZvEvl5adzBTxQyI17t3e5Td0gCUMCjO4XdzknyPW9bm6igIjt59JcT9\npr4Wxlj5MJ68COg2hyEuZy/wZQ5DVmE79FkHvvPlRUnetfIB+aIybopOCVjkvToT\nvdD7RjripbNFc2CUp+ZSrA==\n-----END PRIVATE KEY-----"],
+          "certificate": ["-----BEGIN CERTIFICATE-----\nMIIDBTCCAe2gAwIBAgIUS8TeFUTJ5rVxubEMPrZqkAdBL+YwDQYJKoZIhvcNAQEL\nBQAwEjEQMA4GA1UEAwwHbGFiLWlkcDAeFw0yNjA5MDQwNDEyNTJaFw0zNjA5MDEw\nNDEyNTJaMBIxEDAOBgNVBAMMB2xhYi1pZHAwggEiMA0GCSqGSIb3DQEBAQUAA4IB\nDwAwggEKAoIBAQC8O05JbczCLsGSk6smNm9yPz1OKcBLt3CmIePnaLfDAGvqsMeq\nfXVjCSInPOnT2+rhLZLX8wy1BzPgBayEUTXm1lt6X95BdtVLQSlnCaTyNuF4LRFP\ntnLtFmIgJPOoflcCFUr9s1Zy6JHuGA2PEjfBJdN8hS+on4v6a1leiZgVs+WdIVcm\nEBmH9DjKqpPIaycmyUqCRgdt6P9EVVpv2145907pZHalidrIif6ypJZW0NFO0rb9\ncXwqArs4Kkul77E3+rQUx3FHVftz0bCoqCynX5rUfWemnLHL8f1h56rWzVVrG7Q0\nZhFFzC/sJuvJ14/PYT3sx7kWeNLvBTbpiimDAgMBAAGjUzBRMB0GA1UdDgQWBBSf\nxlIN0KEa1wRWHhNl1cNo1KDDfjAfBgNVHSMEGDAWgBSfxlIN0KEa1wRWHhNl1cNo\n1KDDfjAPBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBAQC0HQ/X3Rfe\n/kvwbVRq0LjAaIyTEswtL2k57hbcVmp7Q7QLlqrcV97DVfAGPWEgTJcuG8D9TjkG\nBOx9UfQeLcb2nWfm3fa2nDjXBEqnWKngP2VoyeoyfcDOjXk8oNO4ggdWRUcShezw\nAqJGEKnGeMx7U+yoVIQtNXGJbrtJjaYJokH7on+DUx0Css8S2CgO6ITGsnbO6dng\nzXyLDDzuTRcgJteakl7o8W1+BfEwxlP8x2ZpbwhX45EfAuA3AWUpLFN2rLsw9Gp4\ncZvGW9rFGdCiwuKTQ+6ve1UqZr0BRQ/CTq38gA44tb+WmTIW8hMCf9RUIx/Wa32t\ncq+N1q/R8Jdc\n-----END CERTIFICATE-----"]
+        }
+      }
+    ]
+  }
+}
