@@ -18,7 +18,7 @@ import org.springframework.context.annotation.Configuration;
 public class LoginConfig {
 
     @Bean
-    public FormLoginConfigurer formLoginConfigurer() {
-        return new FormLoginConfigurer();
+    public FormLoginConfigurer formLoginConfigurer(CaptchaService captchaService) {
+        return new FormLoginConfigurer(captchaService);
     }
 }

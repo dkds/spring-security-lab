@@ -191,6 +191,14 @@
             <p th:text="${session.SPRING_SECURITY_LAST_EXCEPTION?.message}">Invalid credentials</p>
         </div>
 
+        <!-- Captcha challenge: shown after CaptchaFilter blocked a prior
+             attempt (Phase 9), which only happens after several recent
+             failures for this username+IP. -->
+        <div th:if="${param.captcha}" class="error-message">
+            <strong>Verification Required</strong>
+            <p>Too many recent failed attempts. Complete the check below to try again.</p>
+        </div>
+
         <!-- Logout success message -->
         <div th:if="${param.logout}" style="background: #efe; color: #3a3; padding: 12px 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #3a3;">
             You have been logged out successfully.
@@ -230,13 +238,27 @@
 
             <!-- Remember me option (for future use) -->
             <div class="form-group" style="display: flex; align-items: center;">
-                <input 
-                    type="checkbox" 
-                    id="remember-me" 
+                <input
+                    type="checkbox"
+                    id="remember-me"
                     name="remember-me"
                     style="width: auto; margin-right: 8px;"
                 >
                 <label for="remember-me" style="margin: 0;">Remember me</label>
+            </div>
+
+            <!-- Only rendered once CaptchaFilter has actually asked for one
+                 — matches CaptchaService.verify(...): a lab-only stand-in
+                 (any non-blank value passes), not a real challenge widget. -->
+            <div class="form-group" th:if="${param.captcha}">
+                <label for="captchaToken">Verification (type anything — lab placeholder, not a real captcha)</label>
+                <input
+                    type="text"
+                    id="captchaToken"
+                    name="captchaToken"
+                    placeholder="Type anything to continue"
+                    required
+                >
             </div>
 
             <button type="submit" class="login-button">Sign In</button>

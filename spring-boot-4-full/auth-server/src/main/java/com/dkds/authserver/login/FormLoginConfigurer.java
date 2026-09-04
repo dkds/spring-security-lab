@@ -2,6 +2,8 @@ package com.dkds.authserver.login;
 
 import com.dkds.authserver.security.IdentityChangeAwareSessionStrategy;
 import com.dkds.authserver.security.SecurityConstants;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
@@ -24,6 +26,9 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
 /// - HttpSessionRequestCache with matcher /oauth2/authorize.
 /// - Session handling uses IdentityChangeAwareSessionStrategy (delegating to
 ///   ChangeSessionIdAuthenticationStrategy). Do NOT use newSession().
+/// - Phase 9: CaptchaFilter runs before UsernamePasswordAuthenticationFilter,
+///   here only — never on Chain 1/2 (see Phase9ChainInventoryTests).
+@RequiredArgsConstructor
 public class FormLoginConfigurer
         extends AbstractHttpConfigurer<FormLoginConfigurer, HttpSecurity> {
 
@@ -32,6 +37,8 @@ public class FormLoginConfigurer
     /// missing-FACTOR_OTT entry point — see the comment there.
     public static final RequestMatcher BEARER_TOKEN_MATCHER =
             new RequestHeaderRequestMatcher("Authorization", "Bearer ");
+
+    private final CaptchaService captchaService;
 
     @Override
     public void init(HttpSecurity http) {
@@ -68,6 +75,7 @@ public class FormLoginConfigurer
                         .sessionAuthenticationStrategy(sessionStrategy))
                 .exceptionHandling(ex -> ex.defaultAuthenticationEntryPointFor(
                         new LoginUrlAuthenticationEntryPoint(SecurityConstants.LOGIN_PAGE),
-                        new NegatedRequestMatcher(BEARER_TOKEN_MATCHER)));
+                        new NegatedRequestMatcher(BEARER_TOKEN_MATCHER)))
+                .addFilterBefore(new CaptchaFilter(captchaService), UsernamePasswordAuthenticationFilter.class);
     }
 }
