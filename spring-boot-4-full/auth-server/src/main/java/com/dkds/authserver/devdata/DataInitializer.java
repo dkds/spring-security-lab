@@ -324,7 +324,7 @@ public class DataInitializer {
 
         // registrationId "keycloak" matches the redirectUri/ACS URL baked
         // into the Keycloak "lab" realm's SAML client
-        // (auth-server/docker/keycloak/lab-realm.json) — see
+        // (repo root: docker/keycloak/lab-realm.json) — see
         // Saml2Configurer/DatabaseRelyingPartyRegistrationRepository. The
         // certificate is the realm's own fixed, lab-only RSA signing cert
         // (same rationale as auth-server's own jwt-signing-key.pem): without

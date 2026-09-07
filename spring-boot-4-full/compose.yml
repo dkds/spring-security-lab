@@ -1,0 +1,133 @@
+# Canonical infra stack for spring-security-lab: mysql-auth, mysql-resource,
+# keycloak, mailpit. Run directly (`docker compose up -d` from this
+# directory) for a plain host checkout with no devcontainer at all, or let
+# the devbox devcontainer include this file automatically (see
+# ~/devbox/.devcontainer/compose.yml — `include:`) and add its own
+# `workspace` service on top. Either entry point uses the SAME project name
+# below, so they attach to the same running containers rather than starting
+# a second parallel stack.
+#
+# Addressing rule: every service is reachable at the SAME host:port from
+# inside a container and from the host. That is why mysql-auth/mysql-resource
+# listen on their published port internally rather than being remapped —
+# see devbox's README for the full rationale (one /etc/hosts line on the
+# host is the cost; the reader it removes is "works in the container, not
+# in IntelliJ" configuration drift). mysql-auth/mysql-resource are ALSO
+# published a second time on 3307/3308 — see the comment on each service —
+# purely so this file alone covers what auth-server/compose.yaml and
+# resource-server/compose.yaml used to provide standalone; those two files
+# were removed once this superseded them. Do not hand-run a stack that
+# republishes those same host ports (3307, 3308, 8180, 8025, 1025)
+# alongside this one.
+
+name: spring-security-lab
+
+services:
+  mysql-auth:
+    image: mysql:8.4
+    command: ["--port=13306"]
+    # 13306 is this stack's own addressing-rule port. 3307 is published
+    # ADDITIONALLY, listening on the same 13306 inside the container,
+    # purely so this container alone satisfies auth-server's
+    # application.yaml DEFAULT profile (jdbc:mysql://localhost:3307/authdb)
+    # unchanged — the exact host:port the old standalone auth-db container
+    # used to publish.
+    ports: ["13306:13306", "3307:13306"]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-devroot}
+      MYSQL_DATABASE: authdb
+      MYSQL_USER: ${MYSQL_USER:-dev}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-dev}
+    volumes:
+      - mysql-auth-data:/var/lib/mysql
+      - ./docker/mysql/auth-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-P", "13306"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mysql-resource:
+    image: mysql:8.4
+    command: ["--port=13307"]
+    # Same rationale as mysql-auth's port list above: 3308 is this
+    # container's own 13307 published a second time, matching
+    # application.yaml's DEFAULT profile (jdbc:mysql://localhost:3308/resourcedb).
+    ports: ["13307:13307", "3308:13307"]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-devroot}
+      MYSQL_DATABASE: resourcedb
+      MYSQL_USER: ${MYSQL_USER:-dev}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-dev}
+    volumes:
+      - mysql-resource-data:/var/lib/mysql
+      - ./docker/mysql/resource-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-P", "13307"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Test SAML2 IdP. Realm import at ./docker/keycloak — the same file
+  # auth-server's own (now-removed) standalone compose used to reference
+  # under its own docker/ folder; consolidated to repo root alongside
+  # docker/mysql above rather than nested under one specific module.
+  #
+  # KC_HOSTNAME intentionally NOT set (was pinned to http://keycloak:8180).
+  # Keycloak 26's hostname-v2 provider treats an explicit `hostname` as the
+  # one true canonical URL for everything it generates AND validates —
+  # including the SAML Destination check on an incoming AuthnRequest —
+  # regardless of what host:port the request actually arrived on.
+  # Found live: a request reaching Keycloak via a forwarded localhost:8180
+  # (a real setup — accessing these devcontainer ports through an editor's
+  # port-forwarding rather than the keycloak hostname) was rejected with a
+  # generic "Invalid Request" purely because its Destination said
+  # localhost:8180 instead of the pinned keycloak:8180, even though the
+  # request was otherwise entirely valid — isolated by replaying the exact
+  # same AuthnRequest with only the Destination host changed: keycloak:8180
+  # got 200, localhost:8180 got 400, nothing else differed.
+  #
+  # Leaving KC_HOSTNAME unset makes Keycloak resolve its canonical URL
+  # per-request from the incoming Host header instead, so it validates
+  # correctly via keycloak:8180, localhost:8180, or any other hostname a
+  # client actually used to reach it — as long as that host:port is also
+  # what's registered as this SP's Destination/audience, which
+  # DatabaseRelyingPartyRegistrationRepository always reflects (it reads
+  # sso_url straight from the identity_provider row, no separate metadata
+  # fetch). This repo's SAML setup uses static client/IdP config on both
+  # sides, not dynamic metadata-URL fetching, so the "browser and back
+  # channel must agree on one URL" rationale that originally justified
+  # pinning KC_HOSTNAME here doesn't actually apply to it.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4
+    command: ["start-dev", "--import-realm"]
+    ports: ["8180:8180"]
+    environment:
+      KC_HTTP_PORT: "8180"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - ./docker/keycloak:/opt/keycloak/data/import:ro
+    # No volume for /opt/keycloak/data/h2 — deliberately. --import-realm
+    # rebuilds the realm from the mounted *.json on every startup anyway, so
+    # persisting the embedded H2 store across restarts would only let the
+    # realm silently drift from what's committed to git (e.g. an
+    # admin-console tweak surviving a restart but not a fresh clone), which
+    # defeats the point of tracking the realm export. A named volume here
+    # also gets created root-owned by Docker on first use, which the
+    # container's non-root Keycloak user (uid 1000) then can't write to —
+    # AccessDeniedException on keycloakdb.mv.db. Leaving H2 in the
+    # container's own (correctly-owned) filesystem avoids both problems;
+    # state is meant to be thrown away on every restart here.
+
+  # Catches OTT emails. UI on 8025, SMTP on 1025.
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ["8025:8025", "1025:1025"]
+    environment:
+      MP_MAX_MESSAGES: "500"
+
+volumes:
+  mysql-auth-data:
+  mysql-resource-data:

@@ -43,11 +43,13 @@ app:
     # starts a fresh authorization code request with PKCE on its own.
     spa-landing-uri: http://localhost:5173/
   saml:
-    # Standalone compose (auth-server/compose.yaml) runs Keycloak on
-    # localhost:8180. The devcontainer stack runs its own separate instance
-    # at http://keycloak:8180 instead (see application-devpod.yaml) — same
-    # realm file either way (auth-server/docker/keycloak/lab-realm.json),
-    # only the address differs.
+    # ~/repos/compose.yml (the devbox stack) publishes Keycloak on
+    # localhost:8180 either way — reachable at this address whether it's
+    # run standalone (cd ~/repos && docker compose up -d) or via the
+    # devcontainer. Inside the devcontainer itself, the same instance is
+    # also reachable as http://keycloak:8180 (see application-devpod.yaml) —
+    # same realm file (repo root: docker/keycloak/lab-realm.json), only the
+    # address differs depending which side you're resolving it from.
     keycloak-base-url: http://localhost:8180
 
 logging:
