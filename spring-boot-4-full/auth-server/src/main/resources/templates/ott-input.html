@@ -5,7 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Verification Code</title>
     <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
         body {
             font-family: system-ui, -apple-system, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -14,18 +19,34 @@
             align-items: center;
             justify-content: center;
         }
+
         .card {
             background: white;
             border-radius: 12px;
             padding: 2.5rem;
             width: 100%;
             max-width: 400px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
             text-align: center;
         }
-        .icon { font-size: 3rem; margin-bottom: 1rem; }
-        h1 { font-size: 1.5rem; color: #1a1a2e; margin-bottom: 0.5rem; }
-        .subtitle { color: #666; font-size: 0.9rem; margin-bottom: 2rem; }
+
+        .icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            color: #1a1a2e;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 2rem;
+        }
+
         .error {
             background: #fff0f0;
             color: #c0392b;
@@ -35,12 +56,14 @@
             margin-bottom: 1.5rem;
             font-size: 0.875rem;
         }
+
         .code-inputs {
             display: flex;
             gap: 0.5rem;
             justify-content: center;
             margin-bottom: 1.5rem;
         }
+
         .code-inputs input {
             width: 48px;
             height: 56px;
@@ -52,8 +75,14 @@
             outline: none;
             transition: border-color 0.2s;
         }
-        .code-inputs input:focus { border-color: #667eea; }
-        input[type="hidden"] {}
+
+        .code-inputs input:focus {
+            border-color: #667eea;
+        }
+
+        input[type="hidden"] {
+        }
+
         .btn {
             width: 100%;
             padding: 0.85rem;
@@ -66,13 +95,22 @@
             cursor: pointer;
             transition: opacity 0.2s;
         }
-        .btn:hover { opacity: 0.9; }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
         .resend {
             margin-top: 1.5rem;
             font-size: 0.875rem;
             color: #666;
         }
-        .resend a { color: #667eea; text-decoration: none; font-weight: 500; }
+
+        .resend a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body>

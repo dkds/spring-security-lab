@@ -243,43 +243,91 @@ Note for anyone adding `@AutoConfigureMockMvc`-based tests in this project: Boot
 
 ---
 
+### ✅ Phase 7 — SAML2 SP-initiated SSO
+
+- `sso/Saml2Configurer`, `SsoConfig`, `DatabaseRelyingPartyRegistrationRepository`, `SamlUserAuthoritiesConverter` — Keycloak (`lab` realm) as the test IdP, exported to `auth-server/docker/keycloak/lab-realm.json` so it's reproducible via `--import-realm`.
+- Terminal-rejection checks (disabled/locked/no-membership) apply on the SAML path too, same as form login — `Phase7SamlTerminalRejectionTests`.
+- `FACTOR_SAML_RESPONSE` alone satisfies the MFA gate — `Phase7SamlFactorSatisfiesGateTests`.
+- `sso/SsoDiscoveryController` (`/sso/discover`) lets the login page offer SSO without the caller hardcoding a `registrationId` — `Phase7SsoDiscoveryTests`.
+
+### ✅ Phase 8 — IdP-initiated flow + identity change
+
+- `sso/AssertionReplayGuard` (persisted `SeenSamlAssertion` IDs — an unsolicited assertion has no `InResponseTo`, so this is the replay defence), `RelayStateValidator` (host allowlist), `IdpInitiatedSuccessHandler` (no saved request → redirect to the SPA landing route, which starts a fresh authorization-code+PKCE request).
+- `security/IdentityChangeAwareSessionStrategy` — clears the saved request only when the incoming principal differs from the current one; wired via `SessionRequestCacheConfig`.
+- Tests: `Phase8AssertionReplayGuardTests`, `Phase8RelayStateValidatorTests`, `Phase8IdpInitiatedSuccessHandlerTests`, `Phase8IdentityChangeSessionStrategyTests`.
+
+### ✅ Phase 9 — Captcha
+
+- `login/CaptchaFilter` — plain `OncePerRequestFilter` before `UsernamePasswordAuthenticationFilter`, Chain 3 only (`Phase9ChainInventoryTests`).
+- `login/CaptchaService` — `isRequired(username, ip)` gates on recent `login_attempt` failures (`CREDENTIAL_FAILURE_THRESHOLD = 3` within a 15-minute lookback); `verify(token)` is a deliberate lab stand-in accepting any non-blank value except the reserved sentinel `"wrong"`; `recordCaptchaFailure(username)` writes `AppUser.failedAttempts`/`lockedUntil`, locking for 15 minutes at `CAPTCHA_FAILURE_THRESHOLD = 3`.
+- `login/LoginAttemptRecordingListener` — writes `login_attempt` for every password attempt (success and failure), the signal `isRequired()` reads.
+- **2026-09-07 follow-up, this session — three real bugs found and fixed against the actually-running app** (none were caught by the test suite at the time; regression tests weren't added back for these — see the note at the very end of this file if that changes): a `login.html` template crash on every plain `/login` load, a Thymeleaf `param.containsKey(...)` trap that made both captcha messages permanently show, and a missing-lockout gap where a wrong password submitted alongside an already-valid captcha token never counted toward the same lockout a wrong captcha token does. Full writeup at the end of this file under "Session notes."
+
+### ✅ Phase 10 — IdP MFA mapping
+
+- SAML response's `AuthnContextClassRef` maps onto `FACTOR_IDP_MFA` in the response authentication converter, satisfying org policy without an OTT prompt.
+- Tests: `Phase10AuthnContextMfaMappingTests`, `Phase10IdpMfaSatisfiesOrgPolicyTests`, `Phase10UnrecognizedSamlIdentityLoggingTests`.
+
+### ✅ Phase 11 — ArchUnit
+
+- `Phase11ArchitectureTests` enforces DESIGN.md's four dependency rules (login/onetimetoken/sso must not depend on authorization; authorization may depend on organization; security may depend on anything and nothing depends on it; common depends on nothing inside the application).
+
+### Also added, beyond the original PLAN.md
+
+- **Remember-me** — `login/RememberMeToken`, `JpaPersistentTokenRepository`, `LoginConfig.rememberMeServices` (`PersistentTokenBasedRememberMeServices`). Chain 3 only, deliberately not Chain 1 — verified live that Spring Authorization Server's own filters run before `RememberMeAuthenticationFilter` ever gets a chance on `/oauth2/authorize`. `RememberMeTests`.
+- **resource-server `TasksEndpointTests`** — an `/api/**` endpoint beyond the `/api/profile` example Phase 6 documented above; not otherwise written up here yet.
+
+---
+
 ## What's Next
 
 | Phase | Topic | Status |
 |-------|-------|--------|
 | 5 | IP restriction (`OrgIpAuthorizationManager`) | ✅ Done |
 | 6 | Resource server + `common-security` module + JWT validation | ✅ Done |
-| 7 | SAML2 SP-initiated SSO via Keycloak | 🔜 Next |
-| 8 | IdP-initiated flow + identity change strategy | ⏳ |
-| 9 | Captcha filter | ⏳ |
-| 10 | IdP MFA mapping (`AuthnContextClassRef` → `FACTOR_IDP_MFA`) | ⏳ |
-| 11 | ArchUnit enforcement | ⏳ |
+| 7 | SAML2 SP-initiated SSO via Keycloak | ✅ Done |
+| 8 | IdP-initiated flow + identity change strategy | ✅ Done |
+| 9 | Captcha filter | ✅ Done (see 2026-09-07 follow-up above/below) |
+| 10 | IdP MFA mapping (`AuthnContextClassRef` → `FACTOR_IDP_MFA`) | ✅ Done |
+| 11 | ArchUnit enforcement | ✅ Done |
+
+All PLAN.md phases (0–11) are implemented. Remaining open items are the "Known Gaps / Watch Points" below, not unstarted phases.
 
 ---
 
 ## Test Status
 
+Last verified 2026-09-07 (this session, with the captcha fixes below applied):
+
 ```
 auth-server:
-  Tests run: 32, Failures: 0, Errors: 0
+  Tests run: 84, Failures: 0, Errors: 0
   - AuthServerApplicationTests (1) — contextLoads
   - Phase 2: Filter Chains & Terminal Rejections (3)
   - Phase 3: MFA with One-Time Tokens (4)
-  - Phase 4: Per-Organization MFA Policy (7)
-  - Phase 4: Login recording (2)
-  - Phase 4: OTT attempt cap (3)
-  - Phase 4: Chain 1 missing-factor routing (1)
-  - Phase 4: OTT endpoints require FACTOR_PASSWORD (3)
-  - Phase 4: form login falls back to /login-success, not / (1)
+  - Phase 4: total (17) — Authorization Policy (7), Chain 1 missing-factor routing (1),
+    Login recording (2), form login falls back to /login-success not / (1),
+    OTT attempt cap (3), OTT endpoints require FACTOR_PASSWORD (3)
   - Phase 5: IP restriction (5)
+  - Phase 7: total (8) — SAML factor satisfies gate (1), SAML terminal rejection (4),
+    SSO discovery (3)
+  - Phase 8: total (15) — Assertion replay guard (2), RelayState validator (6),
+    IdP-initiated success handler (4), Identity-change session strategy (3)
+  - Phase 9: total (18) — CaptchaFilter end-to-end (3), CaptchaService (10),
+    chain inventory (1), LoginAttemptRecordingListener (4)
+  - Phase 10: total (6) — AuthnContext MFA mapping (3), IdP MFA satisfies org policy (2),
+    unrecognized SAML identity logging (1)
+  - Phase 11: ArchUnit (3)
+  - RememberMeTests (2)
   - Shared signing key: no-JWKS round trip (2)
 
 resource-server:
-  Tests run: 6, Failures: 0, Errors: 0
+  Tests run: 8, Failures: 0, Errors: 0
   - ResourceServerApplicationTests (1) — contextLoads
   - Phase 6: resource-server chain inventory (2)
   - Phase 6: common-security publishes no ambient Customizer<HttpSecurity> bean (1)
   - Phase 6: /api/profile — realistic access-token claims (2)
+  - TasksEndpointTests (2) — not written up elsewhere in this file yet
 ```
 
 Run with:
@@ -295,8 +343,25 @@ cd ../resource-server && mvn -q test
 
 1. **OTT end-to-end spike** — the critical Phase 3 test (saved `/oauth2/authorize` request replayed after OTT) requires running MySQL + Mailpit stack; JUnit tests still verify OTT mechanics only. The login-page/redirect plumbing itself *was* exercised manually against a real running instance during Phase 4 (that's how the `DefaultLoginPageGeneratingFilter` and `defaultSubmitPageUrl` bugs were found) — but not against the full Mailpit-backed stack.
 2. **`IdentityChangeAwareSessionStrategy`** — fully wired but only exercised manually (Phase 7 SSO will stress-test it).
-3. **`failedAttempts`** (lockout counter) — entity field exists but still not updated on auth failure; `last_login_at` and `user_verification.verified_at` *are* now written, via `LoginRecordingListener` (Phase 4).
+3. ~~**`failedAttempts`** (lockout counter) — entity field exists but still not updated on auth failure~~ — **resolved as of Phase 9 / the 2026-09-07 follow-up.** `CaptchaService.recordCaptchaFailure(username)` now writes it from two places: `CaptchaFilter` (wrong captcha token) and `CaptchaAwareAuthenticationFailureHandler` (wrong password submitted alongside an already-valid captcha token — see "Session notes" at the end of this file). `last_login_at` and `user_verification.verified_at` are written via `LoginRecordingListener` (Phase 4), unaffected.
 4. **`DataInitializer`** — runs once (guarded by checking for `user1`), not on every startup as previously noted here; guarded by `app.data.seed=true` property. Do not enable in production. Its seeded `user_verification` rows are timestamped at first-ever seed time, so a freshly-seeded `user2` (DAILY org) won't be prompted for OTT until that timestamp ages past 24h — expected, not a bug, if you're testing the MFA gate manually right after a first run.
 5. **`ddl-auto: update`** — fine for dev/POC; must change to `validate` before any production use.
 6. **Chain 2 (`/api/**`) and the composed org-policy checks** — since `AuthorizationPolicyConfig`'s bean is global, it now also composes into Chain 2's `.authenticated()`, for both halves: the OTT policy manager and (as of Phase 5) `OrgIpAuthorizationManager`. For `NEVER`-mode/non-IP-restricted orgs this is a no-op. For orgs with an active MFA interval, once `verified_at` goes stale mid-token-lifetime, `/api/**` calls will start being denied even though the bearer token hasn't expired, because the JWT-derived authentication doesn't carry `FACTOR_OTT`/`FACTOR_PASSWORD` claims — and this is intentional, not something Phase 6 was meant to close: `FACTOR_*` authorities are session-scoped (DESIGN.md: "issued by Spring Security on authentication"), and baking them into a portable bearer token would let a stolen/replayed token claim a factor it never actually satisfied. Phase 6 gave the access token `ROLE_*` claims, deliberately not `FACTOR_*` ones. Likewise, a bearer-token call from an IP-restricted org's member now also needs to originate from an allowed address. Neither is covered by a Chain-2-specific test yet.
 7. **A real RSA private key is checked into the repo** — `auth-server/src/main/resources/keys/jwt-signing-key.pem`, added in the Phase 6 follow-up that moved from a random-per-boot key to a fixed one shared (public half only) via `common-security`. Standard practice for a Spring Security sample/lab, never acceptable for a real deployment — a production build must load it from a real secret store, not a file in source control, and needs an actual key-rotation story (the fixed key traded that away entirely — see the Phase 6 follow-up writeup above).
+8. **The captcha/lockout fixes below (2026-09-07) have no regression tests yet.** All three were found and fixed by hand against the live app (`login.html` template + `CaptchaAwareAuthenticationFailureHandler`); the existing 84 auth-server tests were re-run and still pass (they never exercised these paths), but nothing new asserts them. Worth adding before touching `login.html` or the captcha classes again: (a) `GET /login` with no query string renders without error, (b) a wrong-password-with-valid-captcha-token retry redirects to `?error&captchaRequired` and the field stays visible, (c) three such attempts lock the account the same as three wrong-captcha-token attempts do.
+
+---
+
+## Session notes — 2026-09-07: captcha/login-page fixes
+
+Found and fixed live against the running app (IntelliJ on host, containers via the devcontainer's compose stack), not from reading code alone. Recorded here because none of them were caught by the existing test suite and the root causes are non-obvious enough to be worth not re-deriving next time.
+
+**1. `EL1001E: cannot convert from null to boolean` on `GET /login`.** `login.html` had `th:if="${param.captcha and !param.containsKey('error')}"`. Thymeleaf's `param` map (`WebEngineContext.RequestParameterMap`) returns a plain `null` from `.get(key)` — not an empty list — for a missing request parameter, same as `HttpServletRequest.getParameterValues()`. A bare `th:if="${param.captcha}"` tolerates that fine (Thymeleaf does its own null-is-false coercion on the whole expression's *final* result), but SpEL's `and` operator evaluates each operand to a real `Boolean` *internally*, and converting `null` to primitive `boolean` throws. This crashed on essentially every plain `/login` load or `?error` bounce (no `captcha` param present) — not an edge case.
+
+**2. Fixing #1 with `param.containsKey(...)` silently broke the messages instead of the page.** `RequestParameterMap.containsKey(Object)` is hard-coded to `return true` always, by Thymeleaf's own design (see its source: the comment explains it exists only so `param.xxx` property navigation doesn't throw via Spring's `MapAccessor` on a missing key — it was never meant to answer "is this key present"). Using it made `param.containsKey('captcha') and param.containsKey('error')` evaluate `true and true` on literally every request, so "Verification Required"/"Verification Failed" showed permanently regardless of the actual query string. **Correct fix:** compare the *value* to `null` directly — `param.captcha != null` — which routes through `.get()` (correctly implemented) rather than `.containsKey()` (not). Verified against the actual pinned `thymeleaf-3.1.5.RELEASE` sources before trusting this, not guessed.
+
+**3. Wrong password + already-valid captcha token never counted toward the lockout.** `CaptchaService.recordCaptchaFailure(username)` (writes `AppUser.failedAttempts`/`lockedUntil`) was only ever called from `CaptchaFilter`, and only on a *wrong captcha token*. Once past the gate with one valid (any non-blank, non-`"wrong"` — this lab's `verify()` is a stand-in) token, wrong-password retries fell through to Spring Security's default failure handler (`/login?error`, no captcha param at all — which also meant the field disappeared, forcing an extra round trip through `CaptchaFilter`'s informational bounce each time). Since this lab's captcha accepts any non-blank value, that path was effectively unlimited-attempt: an attacker just needed one dummy token to keep resending. New `login/CaptchaAwareAuthenticationFailureHandler`, wired into `FormLoginConfigurer.formLogin(...).failureHandler(...)`: if the failed request carried a non-blank `captchaToken`, it (a) redirects to `?error&captchaRequired` (a query param *deliberately separate* from `CaptchaFilter`'s own `?captcha`, so `login.html` shows the plain "Login Failed" message rather than misattributing it to "Verification Failed") so the field stays visible for retry, and (b) calls `captchaService.recordCaptchaFailure(username)` so it counts toward the same lockout. Uses "was a token present in *this* request" rather than a fresh `captchaService.isRequired(...)` call — the latter would misfire on the exact request that first crosses the 3-failure threshold (before that request's own `CaptchaFilter` pass ever required a token), wrongly gating and counting an attempt that never actually went through the captcha step.
+
+**Environment note, unrelated to the app:** this devcontainer's inner docker-in-docker daemon (for Testcontainers) failed to start in the sandbox this session ran in — kernel has no `iptables` `nat` table (`Table does not exist`, no `modprobe` available to load it). Did not affect anything above: `mysql-auth`/`mysql-resource`/`keycloak`/`mailpit` are sibling containers on the compose network, not spawned by the inner daemon, and stayed reachable throughout via Docker's embedded DNS. Not otherwise investigated or fixed — flagging in case it recurs; may be specific to that one sandbox rather than this devcontainer generally.
+
+**Devcontainer change, same session:** `~/devbox/.devcontainer/compose.yml` now has a `claude-config` named volume on the `workspace` service (mirrors the existing `rovodev-config` pattern) mounted at `~/.claude`, so credentials/session history/memory files survive a container rebuild. It's a *new* volume — Docker only auto-populates a named volume from the image's own baked-in content on first creation, not from a currently-running container's writable layer — so this protects *future* rebuilds; it does not retroactively carry over whatever was in `~/.claude` before this volume existed.

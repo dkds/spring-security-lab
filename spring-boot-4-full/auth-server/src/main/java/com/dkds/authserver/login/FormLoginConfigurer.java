@@ -80,6 +80,7 @@ public class FormLoginConfigurer
                         // back to its own default of "/", which 404s since
                         // this auth-server-only app has no root controller.
                         .defaultSuccessUrl(SecurityConstants.LOGIN_SUCCESS_URL)
+                        .failureHandler(new CaptchaAwareAuthenticationFailureHandler(captchaService))
                         .permitAll())
                 .requestCache(cache -> cache.requestCache(requestCache))
                 .sessionManagement(session -> session

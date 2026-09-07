@@ -13,8 +13,8 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
-                "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-                sans-serif;
+            "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+            sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
@@ -179,114 +179,119 @@
     </style>
 </head>
 <body>
-    <div class="login-container">
-        <div class="login-header">
-            <h1>🔐 Login</h1>
-            <p>Auth Server</p>
-        </div>
+<div class="login-container">
+    <div class="login-header">
+        <h1>🔐 Login</h1>
+        <p>Auth Server</p>
+    </div>
 
-        <!-- Error message if login failed -->
-        <div th:if="${param.error}" class="error-message">
-            <strong>Login Failed</strong>
-            <p th:text="${session.SPRING_SECURITY_LAST_EXCEPTION?.message}">Invalid credentials</p>
-        </div>
+    <!-- Error message if login failed -->
+    <div th:if="${param.error}" class="error-message">
+        <strong>Login Failed</strong>
+        <p th:text="${session.SPRING_SECURITY_LAST_EXCEPTION?.message}">Invalid credentials</p>
+    </div>
 
-        <!-- Captcha challenge: shown after CaptchaFilter blocked a prior
-             attempt (Phase 9), which only happens after several recent
-             failures for this username+IP. ?error alongside ?captcha means
-             a token WAS submitted and was wrong (counts toward the lockout
-             below) — distinct from the plain first-time bounce, where
-             nothing has been attempted yet. -->
-        <div th:if="${param.captcha and !param.containsKey('error')}" class="error-message">
-            <strong>Verification Required</strong>
-            <p>Too many recent failed attempts. Complete the check below to try again.</p>
-        </div>
-        <div th:if="${param.captcha and param.containsKey('error')}" class="error-message">
-            <strong>Verification Failed</strong>
-            <p>That wasn't accepted. Repeated failures here will lock the account for a while — try again.</p>
-        </div>
+    <!-- Captcha challenge: shown after CaptchaFilter blocked a prior
+         attempt (Phase 9), which only happens after several recent
+         failures for this username+IP. ?error alongside ?captcha means
+         a token WAS submitted and was wrong (counts toward the lockout
+         below) — distinct from the plain first-time bounce, where
+         nothing has been attempted yet. -->
+    <div th:if="${param.captcha != null and param.error == null}" class="error-message">
+        <strong>Verification Required</strong>
+        <p>Too many recent failed attempts. Complete the check below to try again.</p>
+    </div>
+    <div th:if="${param.captcha != null and param.error != null}" class="error-message">
+        <strong>Verification Failed</strong>
+        <p>That wasn't accepted. Repeated failures here will lock the account for a while — try again.</p>
+    </div>
 
-        <!-- Locked out: CaptchaService.recordCaptchaFailure(...) hit the
-             threshold (Phase 9 follow-up). AppUserDetailsService enforces
-             this independently; this message is purely so a locked caller
-             sees something specific rather than a generic failure. -->
-        <div th:if="${param.locked}" class="error-message">
-            <strong>Account Temporarily Locked</strong>
-            <p>Too many failed verification attempts. Try again in a while.</p>
-        </div>
+    <!-- Locked out: CaptchaService.recordCaptchaFailure(...) hit the
+         threshold (Phase 9 follow-up). AppUserDetailsService enforces
+         this independently; this message is purely so a locked caller
+         sees something specific rather than a generic failure. -->
+    <div th:if="${param.locked}" class="error-message">
+        <strong>Account Temporarily Locked</strong>
+        <p>Too many failed verification attempts. Try again in a while.</p>
+    </div>
 
-        <!-- Logout success message -->
-        <div th:if="${param.logout}" style="background: #efe; color: #3a3; padding: 12px 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #3a3;">
-            You have been logged out successfully.
-        </div>
+    <!-- Logout success message -->
+    <div th:if="${param.logout}"
+         style="background: #efe; color: #3a3; padding: 12px 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #3a3;">
+        You have been logged out successfully.
+    </div>
 
-        <!-- Demo credentials info -->
-        <div class="form-info">
-            <strong>Demo Credentials:</strong><br>
-            Username: <code>user1</code> | Password: <code>password1</code><br>
-            Username: <code>admin</code> | Password: <code>adminpw</code>
-        </div>
+    <!-- Demo credentials info -->
+    <div class="form-info">
+        <strong>Demo Credentials:</strong><br>
+        Username: <code>user1</code> | Password: <code>password1</code><br>
+        Username: <code>admin</code> | Password: <code>adminpw</code>
+    </div>
 
-        <!-- Login form -->
-        <form th:action="@{/login}" method="post">
-            <div class="form-group">
-                <label for="username">Username</label>
-                <input 
-                    type="text" 
-                    id="username" 
-                    name="username" 
+    <!-- Login form -->
+    <form th:action="@{/login}" method="post">
+        <div class="form-group">
+            <label for="username">Username</label>
+            <input
+                    type="text"
+                    id="username"
+                    name="username"
                     placeholder="Enter your username"
                     required
                     autofocus
-                >
-            </div>
+            >
+        </div>
 
-            <div class="form-group">
-                <label for="password">Password</label>
-                <input 
-                    type="password" 
-                    id="password" 
-                    name="password" 
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input
+                    type="password"
+                    id="password"
+                    name="password"
                     placeholder="Enter your password"
                     required
-                >
-            </div>
+            >
+        </div>
 
-            <!-- Remember me option (for future use) -->
-            <div class="form-group" style="display: flex; align-items: center;">
-                <input
+        <!-- Remember me option (for future use) -->
+        <div class="form-group" style="display: flex; align-items: center;">
+            <input
                     type="checkbox"
                     id="remember-me"
                     name="remember-me"
                     style="width: auto; margin-right: 8px;"
-                >
-                <label for="remember-me" style="margin: 0;">Remember me</label>
-            </div>
+            >
+            <label for="remember-me" style="margin: 0;">Remember me</label>
+        </div>
 
-            <!-- Only rendered once CaptchaFilter has actually asked for one
-                 — matches CaptchaService.verify(...): a lab-only stand-in
-                 (any non-blank value passes), not a real challenge widget. -->
-            <div class="form-group" th:if="${param.captcha}">
-                <label for="captchaToken">Verification (type anything — lab placeholder, not a real captcha)</label>
-                <input
+        <!-- Rendered once CaptchaFilter has actually asked for one (?captcha),
+             or CaptchaAwareAuthenticationFailureHandler kept it visible after
+             a wrong-password rejection that still had a valid captcha token
+             attached (?captchaRequired) — matches CaptchaService.verify(...):
+             a lab-only stand-in (any non-blank value passes), not a real
+             challenge widget. -->
+        <div class="form-group" th:if="${param.captcha != null or param.captchaRequired != null}">
+            <label for="captchaToken">Verification (type anything — lab placeholder, not a real captcha)</label>
+            <input
                     type="text"
                     id="captchaToken"
                     name="captchaToken"
                     placeholder="Type anything to continue"
                     required
-                >
-            </div>
-
-            <button type="submit" class="login-button">Sign In</button>
-        </form>
-
-        <div class="sso-divider">or</div>
-        <a href="/sso/discover" class="sso-button">Sign in with SSO</a>
-
-        <div class="login-footer">
-            <p>Phase 2: Form Login + OAuth2 Authorization Code Flow</p>
-            <p>Phase 7: SP-initiated SAML2 (test user: <code>ssouser@dkds.com</code> via Keycloak's <code>lab</code> realm)</p>
+            >
         </div>
+
+        <button type="submit" class="login-button">Sign In</button>
+    </form>
+
+    <div class="sso-divider">or</div>
+    <a href="/sso/discover" class="sso-button">Sign in with SSO</a>
+
+    <div class="login-footer">
+        <p>Phase 2: Form Login + OAuth2 Authorization Code Flow</p>
+        <p>Phase 7: SP-initiated SAML2 (test user: <code>ssouser@dkds.com</code> via Keycloak's <code>lab</code> realm)
+        </p>
     </div>
+</div>
 </body>
 </html>
